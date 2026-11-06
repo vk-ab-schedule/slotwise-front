@@ -7,11 +7,12 @@ import { authStore } from '../auth/authStore'
 import { isMockMode } from '../api/http'
 
 const roleLabel = { STUDENT: 'Участник', TEACHER: 'Преподаватель', ORGANIZER: 'Организатор', ADMIN: 'Администратор' }
+const screenPath = (id: string) => id === '3:3' ? '/availability' : `/screens/${id}`
 
 function ScreenActions({ actions }: { actions?: [string, string][] }) {
   if (!actions?.length) return null
   return <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mt: 2 }}>
-    {actions.map(([label, target], index) => <Button key={`${label}-${target}`} component={Link} to={`/screens/${target}`} variant={index === 0 ? 'contained' : 'outlined'} sx={{ minWidth: 135 }}>{label}</Button>)}
+    {actions.map(([label, target], index) => <Button key={`${label}-${target}`} component={Link} to={screenPath(target)} variant={index === 0 ? 'contained' : 'outlined'} sx={{ minWidth: 135 }}>{label}</Button>)}
   </Stack>
 }
 
@@ -84,13 +85,13 @@ export function MockupPage({ screenId }: { screenId?: string }) {
     <Typography color="text.secondary" variant="body2" sx={{ mb: 2.5 }}>{spec.subtitle}</Typography>
     {spec.notice && spec.kind !== 'status' && <Alert severity={spec.tone ?? 'info'} icon={false} sx={{ mb: 2, bgcolor: spec.tone === 'warning' ? colors.amberBg : spec.tone === 'error' ? colors.redBg : spec.tone === 'success' ? colors.greenBg : colors.light }}><Typography fontWeight={500} variant="body2">{spec.notice}</Typography></Alert>}
     <Metrics spec={spec} />
-    {spec.kind === 'calendar' ? <CalendarScreen spec={spec} /> : spec.kind === 'status' ? <StatusScreen spec={spec} /> : spec.kind === 'table' || spec.kind === 'detail' ? <><DataTable spec={spec} />{spec.fields && <Box sx={{ mt: 2 }}><FieldList spec={spec} /></Box>}<ScreenActions actions={spec.actions} /></> : spec.kind === 'form' ? <><FieldList spec={spec} /><ScreenActions actions={spec.actions} /></> : <><Stack direction={{ xs: 'column', sm: 'row' }} gap={2}><Card sx={{ flex: 1 }}><CardContent><Typography variant="h5">Сравнение вариантов</Typography><Typography color="text.secondary" sx={{ mt: 2 }}>Метрики и назначения в рабочем варианте</Typography></CardContent></Card><Card sx={{ flex: 1 }}><CardContent><Typography variant="h5">Сценарий</Typography><Typography color="text.secondary" sx={{ mt: 2 }}>Изменения на копии данных</Typography></CardContent></Card></Stack><ScreenActions actions={spec.actions} /></>}
+    {spec.kind === 'calendar' ? <CalendarScreen spec={spec} /> : spec.kind === 'status' ? <StatusScreen spec={spec} /> : spec.kind === 'table' || spec.kind === 'detail' ? <>{spec.columns && <DataTable spec={spec} />}{spec.fields && <Box sx={{ mt: 2 }}><FieldList spec={spec} /></Box>}<ScreenActions actions={spec.actions} /></> : spec.kind === 'form' ? <><FieldList spec={spec} /><ScreenActions actions={spec.actions} /></> : <><Stack direction={{ xs: 'column', sm: 'row' }} gap={2}><Card sx={{ flex: 1 }}><CardContent><Typography variant="h5">Сравнение вариантов</Typography><Typography color="text.secondary" sx={{ mt: 2 }}>Метрики и назначения в рабочем варианте</Typography></CardContent></Card><Card sx={{ flex: 1 }}><CardContent><Typography variant="h5">Сценарий</Typography><Typography color="text.secondary" sx={{ mt: 2 }}>Изменения на копии данных</Typography></CardContent></Card></Stack><ScreenActions actions={spec.actions} /></>}
     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 4 }}>Макет Figma {spec.id} · демонстрационные данные</Typography>
   </Box>
 }
 
 export function ScreenIndex() {
   return <Box><Typography variant="h4">Экраны SlotWise</Typography><Typography color="text.secondary" variant="body2" sx={{ mb: 3 }}>Все 42 экранных состояния из макета. Переходы доступны по карточкам и действиям.</Typography>
-    {(['STUDENT', 'ORGANIZER', 'ADMIN'] as const).map(role => <Box key={role} sx={{ mb: 4 }}><Typography variant="h5" sx={{ mb: 1.5 }}>{roleLabel[role]}</Typography><Grid container spacing={1.5}>{screens.filter(screen => role === 'STUDENT' ? screen.role === 'STUDENT' || screen.role === 'TEACHER' : screen.role === role).map(screen => <Grid key={screen.id} size={{ xs: 12, sm: 6, lg: 4 }}><Paper component={Link} to={`/screens/${screen.id}`} sx={{ display: 'block', p: 2, height: '100%', '&:hover': { borderColor: colors.blue } }}><Typography fontWeight={500}>{screen.title}</Typography><Typography variant="caption" color="text.secondary">{screen.id} · {screen.kind}</Typography></Paper></Grid>)}</Grid></Box>)}
+    {(['STUDENT', 'ORGANIZER', 'ADMIN'] as const).map(role => <Box key={role} sx={{ mb: 4 }}><Typography variant="h5" sx={{ mb: 1.5 }}>{roleLabel[role]}</Typography><Grid container spacing={1.5}>{screens.filter(screen => role === 'STUDENT' ? screen.role === 'STUDENT' || screen.role === 'TEACHER' : screen.role === role).map(screen => <Grid key={screen.id} size={{ xs: 12, sm: 6, lg: 4 }}><Paper component={Link} to={screenPath(screen.id)} sx={{ display: 'block', p: 2, height: '100%', '&:hover': { borderColor: colors.blue } }}><Typography fontWeight={500}>{screen.title}</Typography><Typography variant="caption" color="text.secondary">{screen.id} · {screen.kind}</Typography></Paper></Grid>)}</Grid></Box>)}
   </Box>
 }

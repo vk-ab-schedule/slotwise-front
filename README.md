@@ -13,12 +13,17 @@ npm run dev
 
 Open the URL printed by Vite (normally `http://localhost:5173`). By default, the frontend uses local mock data so screens can be reviewed without a backend. Demo accounts: `student@example.test`, `teacher@example.test`, `organizer@example.test`, `admin@example.test`; any nonempty password works. The header's role selector is available only in mock mode.
 
+The **42 экрана** link opens a catalog of all Figma states. These screens use illustrative data and route-to-route transitions. **Моя занятость** is interactive: week/day navigation, personal intervals with three priorities, editing and deleting, read-only university timetable, saving, and submitting even an empty answer. Mock data persists in browser local storage. Use the browser's local-storage inspector to reset `slotwise-demo-calendar-v1` to the initial example.
+
 To use the real backend, create `.env.local` with `VITE_MOCK_API=false`, start `slotwise-back` on port 8080 and restart Vite. The Vite proxy sends `/api` to the backend. The login flow first requests `/api/auth/me` to obtain the CSRF cookie, then posts credentials. Axios includes the latest `XSRF-TOKEN` cookie as `X-XSRF-TOKEN` on mutations. Production should serve the app and `/api` under the same origin.
+
+The availability API uses `GET` and `PUT /api/sessions/{id}/busy-intervals/me` and `POST .../me/submit`. Set `VITE_SESSION_ID` in `.env.local` for the backend session to display (default `1`). The UI sends the latest opaque `revision` as `expectedRevision`; a stale revision requires reloading. The backend owns normalization and validation in real mode. Session discovery and production date range are pending the session API integration from F4; the demo calendar shows the 15–26 June 2026 period from the mockups.
 
 ## Checks
 
 ```sh
 npm run lint
+npm test
 npm run build
 ```
 
