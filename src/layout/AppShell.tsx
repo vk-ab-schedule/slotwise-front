@@ -1,6 +1,6 @@
 import { Box, Button, Chip, Stack, Typography } from '@mui/material'
 import { observer } from 'mobx-react-lite'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { authStore, type Role } from '../auth/authStore'
 import { isMockMode } from '../api/http'
 import mark from '../assets/my-itmo-mark.svg'
@@ -54,6 +54,7 @@ export const AppShell = observer(function AppShell() {
           {isMockMode() && <Box component="select" aria-label="Демо-роль" value={user.role} onChange={event => { authStore.selectDemoRole(event.target.value as Role); if (location.pathname !== '/login') window.location.assign('/') }} style={{ border: `1px solid ${colors.border}`, borderRadius: 6, padding: 6, background: 'white', color: colors.ink }}>
             {Object.entries(roleNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </Box>}
+          {isMockMode() && <Button component={Link} to="/screens" size="small">42 экрана</Button>}
           <Button size="small" onClick={() => void authStore.logout()}>Выйти</Button>
         </Stack>}
       </Box>
