@@ -1,7 +1,10 @@
 import { Alert, Box, Button, Card, CardContent, Checkbox, FormControlLabel, Grid, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material'
 import { Link, useParams } from 'react-router-dom'
+import { useEffect } from 'react'
 import { colors } from '../theme'
 import { screenById, screens, type ScreenSpec } from './catalog'
+import { authStore } from '../auth/authStore'
+import { isMockMode } from '../api/http'
 
 const roleLabel = { STUDENT: 'Участник', TEACHER: 'Преподаватель', ORGANIZER: 'Организатор', ADMIN: 'Администратор' }
 
@@ -72,6 +75,9 @@ export function MockupPage({ screenId }: { screenId?: string }) {
   const params = useParams()
   const id = screenId ?? params.id ?? ''
   const spec = screenById[id]
+  useEffect(() => {
+    if (spec && isMockMode() && authStore.user?.role !== spec.role) authStore.selectDemoRole(spec.role)
+  }, [spec])
   if (!spec) return <StatusScreen spec={{ id, title: 'Экран не найден', role: 'STUDENT', kind: 'status', subtitle: '', actions: [['К списку экранов', '3:3']] }} />
   return <Box>
     <Typography variant="h4">{spec.title}</Typography>
