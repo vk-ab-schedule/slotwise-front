@@ -6,6 +6,7 @@ import { authStore } from './auth/authStore'
 import { AppShell } from './layout/AppShell'
 import { LoginPage } from './auth/LoginPage'
 import { MockupPage, ScreenIndex } from './screens/MockupPage'
+import { AvailabilityPage } from './availability/AvailabilityPage'
 
 function Home() {
   const role = authStore.user?.role
@@ -23,7 +24,7 @@ export const App = observer(function App() {
     <Route element={<AppShell />}>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<Protected><Home /></Protected>} />
-      <Route path="/availability" element={<Protected><MockupPage screenId="3:3" /></Protected>} />
+      <Route path="/availability" element={<Protected><AvailabilityPage /></Protected>} />
       <Route path="/schedule" element={<Protected><MockupPage screenId="3:306" /></Protected>} />
       <Route path="/requests" element={<Protected><MockupPage screenId="3:559" /></Protected>} />
       <Route path="/organizer/sessions" element={<Protected><MockupPage screenId="4:18" /></Protected>} />
