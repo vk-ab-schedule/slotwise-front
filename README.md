@@ -19,6 +19,20 @@ To use the real backend, create `.env.local` with `VITE_MOCK_API=false`, start `
 
 The availability API uses `GET` and `PUT /api/sessions/{id}/busy-intervals/me` and `POST .../me/submit`. Set `VITE_SESSION_ID` in `.env.local` for the backend session to display (default `1`). The UI sends the latest opaque `revision` as `expectedRevision`; a stale revision requires reloading. The backend owns normalization and validation in real mode. Session discovery and production date range are pending the session API integration from F4; the demo calendar shows the 15–26 June 2026 period from the mockups.
 
+## API types
+
+With the backend running on port 8080, run `npm run api:generate` to regenerate the
+OpenAPI snapshot and TypeScript types from `/v3/api-docs`. The generator also accepts
+a JSON file produced by `./gradlew :app:exportOpenApi` in the backend:
+
+```sh
+npm run api:generate -- ../slotwise-back/app/build/openapi/slotwise.json
+npm run api:check -- openapi/slotwise.json
+```
+
+Commit the regenerated snapshot and declarations together. Auth and availability
+use these declarations in their API calls.
+
 ## Checks
 
 ```sh
