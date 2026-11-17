@@ -1,21 +1,18 @@
 {
   "name": "slotwise-front",
-  "version": "0.0.0",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "engines": {
-    "node": ">=24.21.0 <25"
-  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "vitest run src && npm run test:api",
     "lint": "eslint .",
     "api:generate": "node scripts/generate-api.mjs",
     "api:check": "node scripts/generate-api.mjs --check",
-    "typecheck": "tsc --noEmit"
+    "test:api": "node --test tests/generator.test.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -27,8 +24,7 @@
     "mobx-react-lite": "^4.1.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-router-dom": "^7.9.5",
-    "openapi-fetch": "0.17.0"
+    "react-router-dom": "^7.9.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -39,10 +35,10 @@
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^16.5.0",
+    "openapi-typescript": "7.13.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.3",
     "vite": "^7.3.7",
-    "vitest": "^3.2.4",
-    "openapi-typescript": "7.13.0"
+    "vitest": "^3.2.4"
   }
 }
