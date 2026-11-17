@@ -30,3 +30,23 @@ npm run build
 `src/theme.ts` holds the colors and MUI component defaults from Figma. `src/auth` owns the current user, `src/api` owns HTTP, and screen components are grouped by feature. Static SVGs from Figma are committed in `src/assets`.
 
 Feature branches start from `sprint/2` and target it with PRs; the sprint branch is released to `main` through a separate release PR. See `slotwise-doc/DEVELOPMENT.md`.
+
+## Контракт API
+
+OpenAPI доступен по адресу [`/v3/api-docs`](http://localhost:8080/v3/api-docs).
+Типы запросов и ответов лежат в `src/api/schema.d.ts`. Вход и календарь занятости используют их в запросах через Axios.
+
+При запущенном бэкенде выполните в корне фронтенда:
+
+```sh
+npm run api:generate -- http://localhost:8080/v3/api-docs
+npm run api:check -- http://localhost:8080/v3/api-docs
+```
+
+Если бэкенд недоступен, выполните `./gradlew :app:exportOpenApi` в `slotwise-back`, затем в корне фронтенда:
+
+```sh
+npm run api:generate -- ../slotwise-back/app/build/openapi/slotwise.json
+npm run api:check -- ../slotwise-back/app/build/openapi/slotwise.json
+```
+

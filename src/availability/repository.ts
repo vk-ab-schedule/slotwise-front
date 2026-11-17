@@ -1,6 +1,6 @@
 import { http, isMockMode } from '../api/http'
 import { normalizeIntervals } from './time'
-import type { BusyCalendar, IntervalInput } from './types'
+import type { BusyCalendar, IntervalInput, ReplaceCalendarRequest, SubmitCalendarRequest } from './types'
 
 const storageKey = 'slotwise-demo-calendar-v1'
 const sessionId = Number(import.meta.env.VITE_SESSION_ID || 1)
@@ -39,7 +39,8 @@ export async function replaceCalendar(expectedRevision: string, intervals: Inter
     const normalized = normalizeIntervals(intervals, current.timeZone, '2026-06-15', '2026-06-26', '09:00', '18:00')
     return writeMock({ ...current, revision: `demo-v${Number(current.revision.slice(6)) + 1}`, intervals: normalized.map((interval, index) => ({ ...interval, id: index + 1 })) })
   }
-  const { data } = await http.put<BusyCalendar>(`/sessions/${sessionId}/busy-intervals/me`, { expectedRevision, intervals })
+  const body: ReplaceCalendarRequest = { expectedRevision, intervals }
+  const { data } = await http.put<BusyCalendar>(`/sessions/${sessionId}/busy-intervals/me`, body)
   return data
 }
 
@@ -50,6 +51,7 @@ export async function submitCalendar(expectedRevision: string): Promise<BusyCale
     if (!current.editable) throw new Error('Сбор занятости закрыт.')
     return writeMock({ ...current, revision: `demo-v${Number(current.revision.slice(6)) + 1}`, responseStatus: 'SUBMITTED', submittedAt: new Date().toISOString() })
   }
-  const { data } = await http.post<BusyCalendar>(`/sessions/${sessionId}/busy-intervals/me/submit`, { expectedRevision })
+  const body: SubmitCalendarRequest = { expectedRevision }
+  const { data } = await http.post<BusyCalendar>(`/sessions/${sessionId}/busy-intervals/me/submit`, body)
   return data
 }
