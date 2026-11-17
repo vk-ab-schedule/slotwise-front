@@ -39,8 +39,8 @@ OpenAPI доступен по адресу [`/v3/api-docs`](http://localhost:808
 При запущенном бэкенде выполните в корне фронтенда:
 
 ```sh
-npm run api:generate
-npm run api:check
+npm run api:generate -- http://localhost:8080/v3/api-docs
+npm run api:check -- http://localhost:8080/v3/api-docs
 ```
 
 Если бэкенд недоступен, выполните `./gradlew :app:exportOpenApi` в `slotwise-back`, затем в корне фронтенда:
