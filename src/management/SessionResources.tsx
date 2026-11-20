@@ -17,7 +17,7 @@ export function SessionResources({ session }: { session: Schema['PlanningSession
 }
 type ResourceData = { selection: Selection; people: Schema['PersonSummary'][]; groups: Schema['UniversityGroupResponse'][]; rooms: Schema['UniversityRoomResponse'][] }
 function ResourceEditor({ data, version }: { data: ResourceData; version: number }) {
-  const [selection, setSelection] = useState(() => structuredClone(data.selection)), [currentVersion, setVersion] = useState(version)
+  const [selection, setSelection] = useState(() => structuredClone(data.selection)), [currentVersion, setVersion] = useState(Math.max(version, ...Object.values(data.selection).map(s => s.sessionVersion)))
   const [pending, setPending] = useState(false), [error, setError] = useState(''), [success, setSuccess] = useState('')
   const id = selection.participants.sessionId
   const save = async (kind: SelectionKind) => {

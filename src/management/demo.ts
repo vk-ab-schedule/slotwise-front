@@ -34,7 +34,7 @@ export function initialDatabase(): Database {
       { ...template, id: 5, version: 1, name: 'Защита ВКР', commissionSize: 3, requiresChair: true, equipmentIds: [1], dependencies: [{ predecessorTypeId: 4, minGapDays: 3, maxGapDays: null }] },
     ],
     sessions: [{ id: 1, version: 1, inputVersion: 1, organizerId: 3, name: 'Защиты ВКР · P3410', timeZone: 'Europe/Moscow', startsAt: '2026-06-14T21:00:00Z', endsAt: '2026-06-26T15:00:00Z', workingDays: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'], workingDayStart: '09:00:00', workingDayEnd: '18:00:00', collectionStartsAt: now, collectionEndsAt: '2026-06-10T15:00:00Z', collectionStatus: 'OPEN', createdAt: now }],
-    rules: { 1: defaultRules() }, events: [],
+    rules: { 1: defaultRules() }, events: [], eventRoles: {}, eventDependencies: {},
     selections: { 1: { participants: { sessionId: 1, sessionVersion: 1, inputVersion: 1, studyGroupIds: [1], accountIds: [], participants: [accounts[0]] }, rooms: { sessionId: 1, sessionVersion: 1, inputVersion: 1, roomIds: [1] }, commission: { sessionId: 1, sessionVersion: 1, inputVersion: 1, candidates: [{ accountId: 2, canChair: true }, { accountId: 5, canChair: false }, { accountId: 6, canChair: false }] } } },
   }
 }

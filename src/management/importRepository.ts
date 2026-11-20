@@ -1,5 +1,5 @@
 import { http, isMockMode } from '../api/http'
-import { readDatabase, writeDatabase } from './repository'
+import { invalidateSessions, readDatabase, writeDatabase } from './repository'
 import { timeZoneValid } from './university'
 import type { Database, Schema } from './types'
 
@@ -79,13 +79,13 @@ export async function importUniversity(input: Import, dryRun: boolean, allowPart
         else { db.supervisions.push({ studentId, supervisorId }); report[section].created++ }
       } else {
         const accountId = external(db.accounts, raw.account), roomId = external(db.rooms, raw.room)
-        if (raw.account && !accountId || raw.room && !roomId || !accountId && !roomId || !Number.isFinite(Date.parse(String(raw.start))) || !Number.isFinite(Date.parse(String(raw.end))) || Date.parse(String(raw.start)) >= Date.parse(String(raw.end))) { reject(section, index, 'Проверьте ссылки на участника / аудиторию и время начала и конца.'); continue }
+        if (raw.account && !accountId || raw.room && !roomId || !accountId && !roomId || !/(Z|[+-]\d{2}:\d{2})$/.test(String(raw.start)) || !/(Z|[+-]\d{2}:\d{2})$/.test(String(raw.end)) || !Number.isFinite(Date.parse(String(raw.start))) || !Number.isFinite(Date.parse(String(raw.end))) || Date.parse(String(raw.start)) >= Date.parse(String(raw.end))) { reject(section, index, 'Проверьте ссылки на участника / аудиторию и время начала и конца с часовым смещением.'); continue }
         upsert('timetable', { id: nextId(db.timetable), externalId: `import:${raw.account ?? ''}:${raw.room ?? ''}:${raw.start}:${raw.end}`, accountId: accountId ?? null, roomId: roomId ?? null, startsAt: String(raw.start), endsAt: String(raw.end), description: null }, index)
       }
     }
   }
   const summary = Object.values(report).reduce((a, c) => ({ total: a.total + c.total, created: a.created + c.created, updated: a.updated + c.updated, unchanged: a.unchanged + c.unchanged, rejected: a.rejected + c.rejected }), counts())
   const applied = !dryRun && (!summary.rejected || allowPartial)
-  if (applied) writeDatabase(db)
+  if (applied) { if (summary.created || summary.updated) invalidateSessions(db); writeDatabase(db) }
   return { allowPartial, applied, dryRun, diagnostics, sections: report, summary }
 }

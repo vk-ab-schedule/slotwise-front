@@ -30,6 +30,8 @@ export type Page<T> = { items: T[]; page: number; size: number; totalElements: n
 export type Database = { [R in Resource]: ResourceMap[R][] } & {
   rules: Record<number, Schema['SessionRulesResponse']>
   events: Schema['EventResponse'][]
+  eventRoles: Record<number, Schema['ParticipantRole'][]>
+  eventDependencies: Record<number, Schema['EventTypeDependency'][] | null>
   selections: Record<number, {
     participants: Schema['ParticipantsResponse']
     rooms: Schema['RoomsResponse']

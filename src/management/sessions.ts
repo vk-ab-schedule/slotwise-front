@@ -27,6 +27,13 @@ export function validateSession(v: FormValues): Record<string, string> {
   if (String(v.collectionEndsAt) <= String(v.collectionStartsAt)) errors.collectionEndsAt = 'Конец сбора должен быть позже начала'
   if (String(v.collectionEndsAt) >= `${v.firstDay}T00:00`) errors.collectionEndsAt = 'Сбор должен закончиться до первого дня периода'
   if (!Array.isArray(v.workingDays) || !v.workingDays.length) errors.workingDays = 'Выберите рабочие дни'
+  else if (v.firstDay && v.lastDay && String(v.firstDay) <= String(v.lastDay)) {
+    const start = Date.parse(`${v.firstDay}T00:00:00Z`), end = Date.parse(`${v.lastDay}T00:00:00Z`)
+    const days = Object.keys(dayLabels)
+    let found = false
+    for (let day = start; day <= Math.min(end, start + 6 * 86400000); day += 86400000) if (v.workingDays.includes(days[(new Date(day).getUTCDay() + 6) % 7])) found = true
+    if (!found) errors.workingDays = 'В периоде нет выбранных рабочих дней'
+  }
   return errors
 }
 export function sessionPayload(v: FormValues): Schema['CreatePlanningSessionRequest'] {
@@ -71,6 +78,11 @@ export async function saveSelection<K extends SelectionKind>(id: number, kind: K
   if (!isMockMode()) return (await http.put<Selection[K]>(`/sessions/${id}/${selectionPath(kind)}`, body)).data
   const db = readDatabase(), session = ownedSession(db, id)
   assertVersion(session.version, expectedVersion)
+  if (kind === 'participants') {
+    const participants = value as Selection['participants']
+    const ids = new Set([...participants.accountIds, ...db.groups.filter(g => participants.studyGroupIds.includes(g.id)).flatMap(g => g.studentIds)])
+    if (db.events.filter(e => e.sessionId === id).some(e => e.participants.some(p => p.role === 'STUDENT' && !ids.has(p.accountId)))) throw new Error('Нельзя убрать участников, которые уже используются в событиях.')
+  }
   session.version++; session.inputVersion++
   const updated = { ...value, sessionId: id, sessionVersion: session.version, inputVersion: session.inputVersion }
   if (kind === 'participants') {

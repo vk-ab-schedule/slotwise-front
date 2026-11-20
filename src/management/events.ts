@@ -17,7 +17,7 @@ export async function createEvents(id: number, input: Schema['CreateEventsReques
   if (!type) throw new Error('Выберите активный тип события.')
   const groups = db.groups.filter(g => input.studyGroupIds.includes(g.id))
   const studentIds = [...new Set([...input.studentIds, ...groups.flatMap(g => g.studentIds)])]
-  const targets = type.granularity === 'PER_GROUP' ? groups.map(g => ({ label: g.name, students: g.studentIds, groupId: g.id })) : studentIds.map(studentId => ({ label: personName(db.accounts.find(a => a.id === studentId)!), students: [studentId], groupId: groups.find(g => g.studentIds.includes(studentId))?.id ?? null }))
+  const targets = type.granularity === 'PER_GROUP' ? groups.map(g => ({ label: g.name, students: g.studentIds, groupId: g.id })) : studentIds.map(studentId => ({ label: personName(db.accounts.find(a => a.id === studentId)!), students: [studentId], groupId: db.groups.find(g => g.studentIds.includes(studentId))?.id ?? null }))
   const issues: Schema['ApiIssue'][] = [], events: Schema['EventResponse'][] = []
   for (const target of targets) {
     const supervisors = db.supervisions.filter(s => target.students.includes(s.studentId))
@@ -33,7 +33,18 @@ export async function createEvents(id: number, input: Schema['CreateEventsReques
       dependencies: type.dependencies.flatMap(d => db.events.filter(e => e.sessionId === id && e.eventTypeId === d.predecessorTypeId && e.participants.some(p => p.role === 'STUDENT' && target.students.includes(p.accountId))).map(e => ({ predecessorEventId: e.id, minGapDays: d.minGapDays, maxGapDays: d.maxGapDays }))),
     }
     db.events.push(event); events.push(event)
+    db.eventRoles[event.id] = [...type.participantRoles]
+    db.eventDependencies[event.id] = structuredClone(type.dependencies)
     if (!event.complete) issues.push({ code: 'MISSING_TEACHER', severity: 'WARNING', message: `${event.title}: не найден преподаватель дисциплины. Событие сохранено как неполное.`, accountIds: [], eventIds: [event.id], roomIds: [] })
+  }
+  // Connect copied template dependencies regardless of which event type was created first.
+  // A manually edited dependency list is never replaced by later template expansion.
+  for (const event of db.events.filter(e => e.sessionId === id)) {
+    const dependencies = db.eventDependencies[event.id]
+    if (!dependencies) continue
+    const studentIds = event.participants.filter(p => p.role === 'STUDENT').map(p => p.accountId)
+    const resolved = dependencies.flatMap(d => db.events.filter(e => e.sessionId === id && e.eventTypeId === d.predecessorTypeId && e.participants.some(p => p.role === 'STUDENT' && studentIds.includes(p.accountId))).map(e => ({ predecessorEventId: e.id, minGapDays: d.minGapDays, maxGapDays: d.maxGapDays })))
+    if (JSON.stringify(event.dependencies) !== JSON.stringify(resolved)) { event.dependencies = resolved; if (!events.some(e => e.id === event.id)) event.version++ }
   }
   if (events.length) { session.version++; session.inputVersion++; writeDatabase(db) }
   return { events: structuredClone(events), inputVersion: session.inputVersion, sessionVersion: session.version, issues }
@@ -58,6 +69,8 @@ export async function updateEvent(event: Schema['EventResponse'], input: Schema[
   if (error) throw new Error(error)
   const { expectedVersion: _version, ...fields } = input
   void _version
-  Object.assign(current, fields, { version: current.version + 1, complete: input.participants.some(p => p.role === 'STUDENT') && db['event-types'].find(t => t.id === current.eventTypeId)!.participantRoles.every(role => input.participants.some(p => p.role === role)) })
+  const requiredRoles = db.eventRoles[current.id] ?? [...new Set(current.participants.map(p => p.role))]
+  if (JSON.stringify(current.dependencies) !== JSON.stringify(input.dependencies)) db.eventDependencies[current.id] = null
+  Object.assign(current, fields, { version: current.version + 1, complete: input.participants.some(p => p.role === 'STUDENT') && requiredRoles.every(role => input.participants.some(p => p.role === role)) })
   session.version++; session.inputVersion++; writeDatabase(db)
 }

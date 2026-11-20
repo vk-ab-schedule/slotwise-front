@@ -1,4 +1,4 @@
-import { allRecords, assertVersion, readDatabase, writeDatabase } from './repository'
+import { allRecords, assertVersion, invalidateSessions, readDatabase, writeDatabase } from './repository'
 import { http, isMockMode } from '../api/http'
 import { personName, recordKey, roleLabels, type ResourceMap, type Schema } from './types'
 import type { Field, FormValues, Option } from './components'
@@ -70,16 +70,17 @@ export async function deleteUniversityRecord<R extends UniversitySection>(sectio
   }
   const db = readDatabase()
   const id = 'id' in row ? Number(row.id) : 0
-  const used = section === 'groups' ? db.teachings.some(t => t.groupId === id) || Object.values(db.selections).some(s => s.participants.studyGroupIds.includes(id))
+  const used = section === 'groups' ? db.events.some(e => e.studyGroupId === id) || db.teachings.some(t => t.groupId === id) || Object.values(db.selections).some(s => s.participants.studyGroupIds.includes(id))
     : section === 'rooms' ? db.timetable.some(t => t.roomId === id) || Object.values(db.selections).some(s => s.rooms.roomIds.includes(id))
-      : section === 'disciplines' ? db.teachings.some(t => t.disciplineId === id)
-        : section === 'equipment' ? db.rooms.some(r => r.equipmentIds.includes(id)) || db['event-types'].some(t => t.equipmentIds.includes(id)) : false
+      : section === 'disciplines' ? db.events.some(e => e.disciplineId === id) || db.teachings.some(t => t.disciplineId === id)
+        : section === 'equipment' ? db.events.some(e => e.equipmentIds.includes(id)) || db.rooms.some(r => r.equipmentIds.includes(id)) || db['event-types'].some(t => t.equipmentIds.includes(id)) : false
   if (used) throw new Error('Запись используется. Для группы, аудитории или дисциплины снимите отметку «Активна» вместо удаления.')
   const current = db[section].find(r => recordKey(r) === recordKey(row))
   if (!current) throw new Error('Запись уже удалена.')
   if ('version' in current && 'version' in row) assertVersion(current.version, row.version)
   const rows = db[section] as ResourceMap[R][]
   rows.splice(rows.findIndex(r => recordKey(r) === recordKey(row)), 1)
+  invalidateSessions(db)
   writeDatabase(db)
 }
 
@@ -97,6 +98,7 @@ export async function accountAction(account: Schema['AccountResponse'], action: 
   else if (action === 'role') current.role = value as Schema['AccountRole']
   else current.enabled = Boolean(value)
   current.version++
+  invalidateSessions(db)
   writeDatabase(db)
   return structuredClone(current)
 }
