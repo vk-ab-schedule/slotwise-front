@@ -11,6 +11,8 @@ import { RoleGate } from './management/RoleGate'
 import { UniversityPage } from './management/UniversityPage'
 import { ImportPage } from './management/ImportPage'
 import { EventTypesPage } from './management/EventTypesPage'
+import { NewSessionPage, SessionDetailPage, SessionsPage } from './management/SessionsPage'
+import { SessionResources } from './management/SessionResources'
 
 function Home() {
   const role = authStore.user?.role
@@ -31,7 +33,10 @@ export const App = observer(function App() {
       <Route path="/availability" element={<Protected><AvailabilityPage /></Protected>} />
       <Route path="/schedule" element={<Protected><MockupPage screenId="3:306" /></Protected>} />
       <Route path="/requests" element={<Protected><MockupPage screenId="3:559" /></Protected>} />
-      <Route path="/organizer/sessions" element={<Protected><MockupPage screenId="4:18" /></Protected>} />
+      <Route path="/organizer/sessions" element={<Protected><RoleGate role="ORGANIZER"><SessionsPage /></RoleGate></Protected>} />
+      <Route path="/organizer/sessions/new" element={<Protected><RoleGate role="ORGANIZER"><NewSessionPage /></RoleGate></Protected>} />
+      <Route path="/organizer/sessions/:id" element={<Protected><RoleGate role="ORGANIZER"><SessionDetailPage tab="parameters" /></RoleGate></Protected>} />
+      <Route path="/organizer/sessions/:id/resources" element={<Protected><RoleGate role="ORGANIZER"><SessionDetailPage tab="resources">{session => <SessionResources session={session} />}</SessionDetailPage></RoleGate></Protected>} />
       <Route path="/organizer/schedule" element={<Protected><MockupPage screenId="4:754" /></Protected>} />
       <Route path="/organizer/requests" element={<Protected><MockupPage screenId="4:1107" /></Protected>} />
       <Route path="/organizer/scenarios" element={<Protected><MockupPage screenId="4:1288" /></Protected>} />
