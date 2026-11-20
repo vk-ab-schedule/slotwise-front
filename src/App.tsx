@@ -10,6 +10,7 @@ import { AvailabilityPage } from './availability/AvailabilityPage'
 import { RoleGate } from './management/RoleGate'
 import { UniversityPage } from './management/UniversityPage'
 import { ImportPage } from './management/ImportPage'
+import { EventTypesPage } from './management/EventTypesPage'
 
 function Home() {
   const role = authStore.user?.role
@@ -37,7 +38,7 @@ export const App = observer(function App() {
       <Route path="/admin/university" element={<Protected><RoleGate role="ADMIN"><UniversityPage /></RoleGate></Protected>} />
       <Route path="/admin/university/import" element={<Protected><RoleGate role="ADMIN"><ImportPage /></RoleGate></Protected>} />
       <Route path="/admin/users" element={<Protected><RoleGate role="ADMIN"><UniversityPage users /></RoleGate></Protected>} />
-      <Route path="/admin/event-types" element={<Protected><MockupPage screenId="5:375" /></Protected>} />
+      <Route path="/admin/event-types" element={<Protected><RoleGate role="ADMIN"><EventTypesPage /></RoleGate></Protected>} />
       <Route path="/admin/experiments" element={<Protected><MockupPage screenId="5:544" /></Protected>} />
       <Route path="/screens" element={<Protected><ScreenIndex /></Protected>} />
       <Route path="/screens/:id" element={<Protected><MockupPage /></Protected>} />
