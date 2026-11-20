@@ -46,7 +46,8 @@ function visible<R extends Resource>(resource: R, db: Database): ResourceMap[R][
 }
 export async function listRecords<R extends Resource>(resource: R, page = 0, search = ''): Promise<Page<ResourceMap[R]>> {
   if (!isMockMode()) return (await http.get<Page<ResourceMap[R]>>(readPath(resource), { params: { page, size: 20, ...(resource === 'sessions' ? {} : { search }) } })).data
-  const rows = visible(resource, readDatabase()).filter(r => JSON.stringify(r).toLocaleLowerCase().includes(search.toLocaleLowerCase()))
+  const terms = search.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
+  const rows = visible(resource, readDatabase()).filter(r => terms.every(term => JSON.stringify(r).toLocaleLowerCase().includes(term)))
   return { items: structuredClone(rows.slice(page * 20, (page + 1) * 20)), page, size: 20, totalElements: rows.length, totalPages: Math.ceil(rows.length / 20) }
 }
 export async function allRecords<R extends Resource>(resource: R): Promise<ResourceMap[R][]> {
@@ -57,7 +58,7 @@ export async function allRecords<R extends Resource>(resource: R): Promise<Resou
 }
 export async function saveRecord<R extends Resource>(resource: R, input: WriteMap[R], existing?: ResourceMap[R]): Promise<ResourceMap[R]> {
   // Response objects are convenient form defaults, but read-only fields must never be sent back.
-  input = Object.fromEntries(writeFields[resource].filter(key => key in input && !(key === 'role' && existing) && !(key === 'active' && !existing && resource !== 'event-types')).map(key => [key, input[key]])) as WriteMap[R]
+  input = Object.fromEntries(writeFields[resource].filter(key => key in input && !(key === 'role' && existing) && !(key === 'active' && !existing && resource !== 'event-types')).map(key => [key, input[key]])) as unknown as WriteMap[R]
   const version = existing && 'version' in existing ? existing.version : undefined
   const body = version !== undefined ? { ...input, expectedVersion: version } : input
   if (!isMockMode()) {

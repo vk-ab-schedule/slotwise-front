@@ -84,7 +84,11 @@ export async function deleteUniversityRecord<R extends UniversitySection>(sectio
   writeDatabase(db)
 }
 
+export function passwordError(value: unknown): string {
+  return typeof value !== 'string' || !value.trim() || value.length > 128 ? 'Введите непустой пароль длиной до 128 символов.' : ''
+}
 export async function accountAction(account: Schema['AccountResponse'], action: 'role' | 'enabled' | 'password', value: string | boolean): Promise<Schema['AccountResponse']> {
+  if (action === 'password' && passwordError(value)) throw new Error(passwordError(value))
   if (!isMockMode()) {
     const response = await http.put<Schema['AccountResponse']>(`/admin/accounts/${account.id}/${action}`, { expectedVersion: account.version, [action]: value })
     return action === 'password' ? account : response.data

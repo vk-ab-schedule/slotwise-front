@@ -33,6 +33,7 @@ describe('persistent management repository', () => {
     localStorage.setItem(managementStorageKey, JSON.stringify(db))
     expect(await allRecords('equipment')).toHaveLength(45)
     expect((await listRecords('equipment', 0, 'Equipment 45')).items[0].id).toBe(45)
+    expect((await listRecords('accounts', 0, 'Смирнов Александр')).items[0].id).toBe(1)
   })
   it('keeps mock response shapes specific to each resource', async () => {
     const group = await saveRecord('groups', { name: 'P5555', studentIds: [] })
@@ -146,5 +147,8 @@ describe('HTTP contract', () => {
   it('handles the password endpoint with no response body', async () => {
     vi.spyOn(http, 'put').mockResolvedValue({ data: undefined, status: 204 })
     expect(await accountAction(initialDatabase().accounts[0], 'password', 'test-password')).toHaveProperty('id', 1)
+    expect(await accountAction(initialDatabase().accounts[0], 'password', 'short')).toHaveProperty('id', 1)
+    await expect(accountAction(initialDatabase().accounts[0], 'password', ' ')).rejects.toThrow('непустой')
+    await expect(accountAction(initialDatabase().accounts[0], 'password', 'x'.repeat(129))).rejects.toThrow('128')
   })
 })

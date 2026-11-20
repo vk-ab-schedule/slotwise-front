@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { DataTable, ErrorNotice, FormFields, PageHeading, useLoad, validateFields, type FormValues } from './components'
 import { errorMessage, listRecords, saveRecord } from './repository'
-import { accountAction, deleteUniversityRecord, loadCatalogs, universityDefaults, universityFields, universityPayload, universitySections, validateUniversity, type Catalogs, type UniversitySection } from './university'
+import { accountAction, deleteUniversityRecord, loadCatalogs, passwordError, universityDefaults, universityFields, universityPayload, universitySections, validateUniversity, type Catalogs, type UniversitySection } from './university'
 import { personName, recordKey, roleLabels, type ResourceMap, type Schema, type WriteMap } from './types'
 
 export function UniversityPage({ users = false }: { users?: boolean }) {
@@ -81,9 +81,9 @@ function AccountAccess({ account, onClose, onSaved }: { account: Schema['Account
   const [pending, setPending] = useState(false), [error, setError] = useState('')
   return <Dialog open fullWidth maxWidth="sm" onClose={() => { if (!pending) onClose() }}><DialogTitle>Доступ · {personName(account)}</DialogTitle><DialogContent><Stack gap={2} sx={{ pt: 1 }}><Alert severity="info">Изменение роли или отключение завершит действующие сессии пользователя. Каждое действие сохраняется отдельно.</Alert><ErrorNotice error={error} />
     <FormFields fields={[{ name: 'action', label: 'Действие', type: 'select', options: [{ value: 'role', label: 'Изменить роль' }, { value: 'enabled', label: 'Включить / отключить' }, { value: 'password', label: 'Задать / сбросить пароль' }] }]} values={{ action }} disabled={pending} onChange={(_, v) => { setAction(String(v)); setError('') }} />
-    {action === 'password' ? <TextField type="password" label="Новый пароль (8–200 символов)" autoComplete="new-password" value={value.password} disabled={pending} onChange={e => setValue(v => ({ ...v, password: e.target.value }))} /> : <FormFields fields={action === 'role' ? [{ name: 'role', label: 'Роль', type: 'select', options: Object.entries(roleLabels).map(([key, label]) => ({ value: key, label })) }] : [{ name: 'enabled', label: 'Доступ включён', type: 'boolean' }]} values={value} disabled={pending} onChange={(name, v) => setValue(old => ({ ...old, [name]: v }))} />}
+    {action === 'password' ? <TextField type="password" label="Новый пароль (до 128 символов)" autoComplete="new-password" slotProps={{ htmlInput: { maxLength: 128 } }} value={value.password} disabled={pending} onChange={e => setValue(v => ({ ...v, password: e.target.value }))} /> : <FormFields fields={action === 'role' ? [{ name: 'role', label: 'Роль', type: 'select', options: Object.entries(roleLabels).map(([key, label]) => ({ value: key, label })) }] : [{ name: 'enabled', label: 'Доступ включён', type: 'boolean' }]} values={value} disabled={pending} onChange={(name, v) => setValue(old => ({ ...old, [name]: v }))} />}
   </Stack></DialogContent><DialogActions><Button disabled={pending} onClick={onClose}>Отмена</Button><Button variant="contained" disabled={pending} onClick={async () => {
-    if (action === 'password' && (String(value.password).length < 8 || String(value.password).length > 200)) { setError('Пароль должен содержать от 8 до 200 символов.'); return }
+    if (action === 'password' && passwordError(value.password)) { setError(passwordError(value.password)); return }
     setPending(true); setError(''); try { await accountAction(account, action as 'role' | 'enabled' | 'password', value[action] as string | boolean); onSaved() } catch (e) { setError(errorMessage(e)) } finally { setPending(false) }
   }}>Применить</Button></DialogActions></Dialog>
 }
