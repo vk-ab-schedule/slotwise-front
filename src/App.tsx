@@ -7,6 +7,8 @@ import { AppShell } from './layout/AppShell'
 import { LoginPage } from './auth/LoginPage'
 import { MockupPage, ScreenIndex } from './screens/MockupPage'
 import { AvailabilityPage } from './availability/AvailabilityPage'
+import { RoleGate } from './management/RoleGate'
+import { UniversityPage } from './management/UniversityPage'
 
 function Home() {
   const role = authStore.user?.role
@@ -31,8 +33,8 @@ export const App = observer(function App() {
       <Route path="/organizer/schedule" element={<Protected><MockupPage screenId="4:754" /></Protected>} />
       <Route path="/organizer/requests" element={<Protected><MockupPage screenId="4:1107" /></Protected>} />
       <Route path="/organizer/scenarios" element={<Protected><MockupPage screenId="4:1288" /></Protected>} />
-      <Route path="/admin/university" element={<Protected><MockupPage screenId="5:18" /></Protected>} />
-      <Route path="/admin/users" element={<Protected><MockupPage screenId="5:211" /></Protected>} />
+      <Route path="/admin/university" element={<Protected><RoleGate role="ADMIN"><UniversityPage /></RoleGate></Protected>} />
+      <Route path="/admin/users" element={<Protected><RoleGate role="ADMIN"><UniversityPage users /></RoleGate></Protected>} />
       <Route path="/admin/event-types" element={<Protected><MockupPage screenId="5:375" /></Protected>} />
       <Route path="/admin/experiments" element={<Protected><MockupPage screenId="5:544" /></Protected>} />
       <Route path="/screens" element={<Protected><ScreenIndex /></Protected>} />
