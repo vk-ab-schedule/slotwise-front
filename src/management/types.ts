@@ -29,6 +29,7 @@ export type WriteMap = {
 export type Page<T> = { items: T[]; page: number; size: number; totalElements: number; totalPages: number }
 export type Database = { [R in Resource]: ResourceMap[R][] } & {
   rules: Record<number, Schema['SessionRulesResponse']>
+  events: Schema['EventResponse'][]
   selections: Record<number, {
     participants: Schema['ParticipantsResponse']
     rooms: Schema['RoomsResponse']

@@ -8,9 +8,14 @@ export const managementStorageKey = 'slotwise-demo-management-v1'
 export function readDatabase(): Database {
   const raw = localStorage.getItem(managementStorageKey)
   if (!raw) return initialDatabase()
-  try { return JSON.parse(raw) as Database } catch { throw new Error('Не удалось прочитать демо-данные. Удалите slotwise-demo-management-v1 в хранилище браузера.') }
+  try { const db = JSON.parse(raw) as Database; db.events ??= []; return db } catch { throw new Error('Не удалось прочитать демо-данные. Удалите slotwise-demo-management-v1 в хранилище браузера.') }
 }
 export function writeDatabase(db: Database) { localStorage.setItem(managementStorageKey, JSON.stringify(db)) }
+
+// Demo has no saved solver variants; bumping input versions still exposes stale editors.
+export function invalidateSessions(db: Database) {
+  for (const session of db.sessions) { session.version++; session.inputVersion++ }
+}
 
 export function errorMessage(error: unknown): string {
   if (axios.isAxiosError<Schema['ApiProblem']>(error)) {
@@ -71,6 +76,7 @@ export async function saveRecord<R extends Resource>(resource: R, input: WriteMa
   }
   if (current) rows[rows.indexOf(current)] = result
   else rows.push(result)
+  if (resource !== 'sessions' && resource !== 'event-types') invalidateSessions(db)
   writeDatabase(db)
   return structuredClone(result)
 }

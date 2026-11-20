@@ -38,7 +38,7 @@ export async function deleteEventType(type: Schema['EventTypeResponse']) {
   const db = readDatabase(), current = db['event-types'].find(t => t.id === type.id)
   if (!current) throw new Error('Тип уже удалён.')
   assertVersion(current.version, type.version)
-  if (db['event-types'].some(t => t.dependencies.some(d => d.predecessorTypeId === type.id))) throw new Error('Тип используется в зависимостях. Снимите отметку «Доступен для новых событий» вместо удаления.')
+  if (db.events.some(e => e.eventTypeId === type.id) || db['event-types'].some(t => t.dependencies.some(d => d.predecessorTypeId === type.id))) throw new Error('Тип используется в событиях или зависимостях. Снимите отметку «Доступен для новых событий» вместо удаления.')
   db['event-types'] = db['event-types'].filter(t => t.id !== type.id)
   writeDatabase(db)
 }
