@@ -14,6 +14,7 @@ import { EventTypesPage } from './management/EventTypesPage'
 import { NewSessionPage, SessionDetailPage, SessionsPage } from './management/SessionsPage'
 import { SessionResources } from './management/SessionResources'
 import { SessionEvents } from './management/SessionEvents'
+import { SessionRules } from './management/SessionRules'
 
 function Home() {
   const role = authStore.user?.role
@@ -39,6 +40,7 @@ export const App = observer(function App() {
       <Route path="/organizer/sessions/:id" element={<Protected><RoleGate role="ORGANIZER"><SessionDetailPage tab="parameters" /></RoleGate></Protected>} />
       <Route path="/organizer/sessions/:id/resources" element={<Protected><RoleGate role="ORGANIZER"><SessionDetailPage tab="resources">{session => <SessionResources session={session} />}</SessionDetailPage></RoleGate></Protected>} />
       <Route path="/organizer/sessions/:id/events" element={<Protected><RoleGate role="ORGANIZER"><SessionDetailPage tab="events">{session => <SessionEvents session={session} />}</SessionDetailPage></RoleGate></Protected>} />
+      <Route path="/organizer/sessions/:id/rules" element={<Protected><RoleGate role="ORGANIZER"><SessionDetailPage tab="rules">{session => <SessionRules session={session} />}</SessionDetailPage></RoleGate></Protected>} />
       <Route path="/organizer/schedule" element={<Protected><MockupPage screenId="4:754" /></Protected>} />
       <Route path="/organizer/requests" element={<Protected><MockupPage screenId="4:1107" /></Protected>} />
       <Route path="/organizer/scenarios" element={<Protected><MockupPage screenId="4:1288" /></Protected>} />
