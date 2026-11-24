@@ -27,12 +27,12 @@ export function SessionEditor({ session, onSaved }: { session?: Schema['Planning
   const [values, setValues] = useState(() => sessionDefaults(session)), [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState(''), [pending, setPending] = useState(false), [success, setSuccess] = useState('')
   return <Box component="form" sx={{ maxWidth: 900 }} onSubmit={async e => {
-    e.preventDefault(); const issues = { ...validateFields(sessionFields, values), ...validateSession(values) }; setErrors(issues); if (Object.keys(issues).length) return
+    e.preventDefault(); const issues = { ...validateFields(sessionFields, values), ...validateSession(values, session) }; setErrors(issues); if (Object.keys(issues).length) return
     setPending(true); setError(''); setSuccess('')
-    try { const saved = await saveRecord('sessions', sessionPayload(values), session); if (session) { setSuccess('Параметры сохранены.'); onSaved?.() } else navigate(`/organizer/sessions/${saved.id}/resources`) } catch (cause) { setError(errorMessage(cause)) } finally { setPending(false) }
+    try { const saved = await saveRecord('sessions', sessionPayload(values, session), session); if (session) { setSuccess('Параметры сохранены.'); onSaved?.() } else navigate(`/organizer/sessions/${saved.id}/resources`) } catch (cause) { setError(errorMessage(cause)) } finally { setPending(false) }
   }}><Stack gap={2.5}><ErrorNotice error={error} />{success && <Alert severity="success">{success}</Alert>}
     <FormFields fields={sessionFields} values={values} errors={errors} disabled={pending} onChange={(name, value) => { setValues(v => ({ ...v, [name]: value })); setSuccess('') }} />
-    <Alert severity="info" icon={false}>Сбор должен закончиться до первого дня периода проведения. Укажите дни и часы в выбранном часовом поясе.</Alert>
+    <Alert severity="info" icon={false}>Сбор должен закончиться до начала сессии. Укажите дни и часы в выбранном часовом поясе.</Alert>
     <Stack direction="row" gap={1.5}><Button type="submit" variant="contained" disabled={pending}>{pending ? 'Сохранение…' : session ? 'Сохранить параметры' : 'Создать и продолжить'}</Button><Button component={Link} to="/organizer/sessions" disabled={pending}>К списку сессий</Button></Stack>
   </Stack></Box>
 }

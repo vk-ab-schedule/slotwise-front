@@ -65,8 +65,14 @@ export async function importUniversity(input: Import, dryRun: boolean, allowPart
         upsert('groups', { id: nextId(db.groups), version: 1, active: true, externalId: String(raw.externalId), name: String(raw.name || raw.externalId), studentIds: [...new Set(raw.students.map(id => external(db.accounts, id)!))] }, index)
       } else if (section === 'rooms') {
         if (raw.online != null && typeof raw.online !== 'boolean' || !raw.online && (!Number.isInteger(raw.capacity) || Number(raw.capacity) < 1) || !Array.isArray(raw.equipment) || raw.equipment.some(e => !requireText(e))) { reject(section, index, 'Проверьте вместимость, online и массив equipment.'); continue }
+        const externalId = String(raw.externalId)
+        const name = String(raw.name || externalId)
+        if (db.rooms.some(room => room.externalId !== externalId && room.name === name)) {
+          reject(section, index, 'Название уже используется другой аудиторией.')
+          continue
+        }
         const equipmentIds = (raw.equipment as string[]).map(name => { let equipment = db.equipment.find(e => e.name === name); if (!equipment) { equipment = { id: nextId(db.equipment), name }; db.equipment.push(equipment) } return equipment.id })
-        upsert('rooms', { id: nextId(db.rooms), version: 1, active: true, externalId: String(raw.externalId), name: String(raw.name || raw.externalId), capacity: raw.online ? null : Number(raw.capacity), building: raw.building ? String(raw.building) : null, online: Boolean(raw.online), equipmentIds }, index)
+        upsert('rooms', { id: nextId(db.rooms), version: 1, active: true, externalId, name, capacity: raw.online ? null : Number(raw.capacity), building: raw.building ? String(raw.building) : null, online: Boolean(raw.online), equipmentIds }, index)
       } else if (section === 'teaching') {
         const teacherId = external(db.accounts, raw.teacher), groupId = external(db.groups, raw.group), disciplineId = external(db.disciplines, raw.discipline)
         if (!teacherId || !groupId || !disciplineId || db.accounts.find(a => a.id === teacherId)?.role !== 'TEACHER') { reject(section, index, 'Не найдены преподаватель, группа или дисциплина.'); continue }
@@ -79,7 +85,11 @@ export async function importUniversity(input: Import, dryRun: boolean, allowPart
         else { db.supervisions.push({ studentId, supervisorId }); report[section].created++ }
       } else {
         const accountId = external(db.accounts, raw.account), roomId = external(db.rooms, raw.room)
-        if (raw.account && !accountId || raw.room && !roomId || !accountId && !roomId || !/(Z|[+-]\d{2}:\d{2})$/.test(String(raw.start)) || !/(Z|[+-]\d{2}:\d{2})$/.test(String(raw.end)) || !Number.isFinite(Date.parse(String(raw.start))) || !Number.isFinite(Date.parse(String(raw.end))) || Date.parse(String(raw.start)) >= Date.parse(String(raw.end))) { reject(section, index, 'Проверьте ссылки на участника / аудиторию и время начала и конца с часовым смещением.'); continue }
+        if ((raw.account != null) === (raw.room != null)) {
+          reject(section, index, 'Укажите ровно одно поле: account или room.')
+          continue
+        }
+        if (accountId == null && roomId == null || !/(Z|[+-]\d{2}:\d{2})$/.test(String(raw.start)) || !/(Z|[+-]\d{2}:\d{2})$/.test(String(raw.end)) || !Number.isFinite(Date.parse(String(raw.start))) || !Number.isFinite(Date.parse(String(raw.end))) || Date.parse(String(raw.start)) >= Date.parse(String(raw.end))) { reject(section, index, 'Проверьте ссылку на участника или аудиторию и время начала и конца с часовым смещением.'); continue }
         upsert('timetable', { id: nextId(db.timetable), externalId: `import:${raw.account ?? ''}:${raw.room ?? ''}:${raw.start}:${raw.end}`, accountId: accountId ?? null, roomId: roomId ?? null, startsAt: String(raw.start), endsAt: String(raw.end), description: null }, index)
       }
     }

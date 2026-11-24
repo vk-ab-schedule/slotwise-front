@@ -7,7 +7,7 @@ import { accountAction, deleteUniversityRecord } from './university'
 import { createEvents, listEvents, updateEvent } from './events'
 import { deleteEventType } from './eventTypes'
 import { getRules, saveRules } from './rules'
-import { getSelections, saveSelection } from './sessions'
+import { acceptSelectionSave, getSelections, saveSelection } from './sessions'
 
 export function memoryStorage() {
   const values = new Map<string, string>()
@@ -73,11 +73,26 @@ describe('persistent management repository', () => {
   })
   it('shares a current session version across resource and rule edits', async () => {
     const selections = await getSelections(1)
-    const saved = await saveSelection(1, 'rooms', selections.rooms, 1)
+    const saved = await saveSelection(1, 'rooms', selections.rooms)
     expect(saved.sessionVersion).toBe(2)
     await expect(saveRules(1, defaultRules())).rejects.toThrow('Данные изменились')
     const rules = await getRules(1)
     expect((await saveRules(1, rules)).sessionVersion).toBe(3)
+  })
+  it('keeps an older rooms snapshot stale after saving a newer section', async () => {
+    const before = await getSelections(1)
+    const otherTab = await saveSelection(1, 'rooms', { ...before.rooms, roomIds: [2] })
+    const fresh = await getSelections(1)
+    expect(fresh.rooms.sessionVersion).toBe(otherTab.sessionVersion)
+    expect(fresh.participants.sessionVersion).toBe(otherTab.sessionVersion)
+
+    const mixed = { ...fresh, rooms: before.rooms }
+    const saved = await saveSelection(1, 'participants', mixed.participants)
+    const drafts = acceptSelectionSave(mixed, 'participants', saved, mixed.participants.sessionVersion)
+    expect(drafts.commission.sessionVersion).toBe(saved.sessionVersion)
+    await expect(saveSelection(1, 'rooms', drafts.rooms)).rejects.toThrow('Данные изменились')
+    expect((await getSelections(1)).rooms.roomIds).toEqual([2])
+    await expect(saveSelection(1, 'commission', drafts.commission)).resolves.toBeDefined()
   })
   it('copies templates into events and preserves them after template edits', async () => {
     const created = await createEvents(1, { eventTypeId: 4, expectedVersion: 1, studyGroupIds: [1], studentIds: [1] })
@@ -87,7 +102,7 @@ describe('persistent management repository', () => {
     expect((await listEvents(1))[0].durationMinutes).toBe(30)
     await expect(deleteEventType(readDatabase()['event-types'].find(t => t.id === 4)!)).rejects.toThrow('используется')
     const selections = await getSelections(1)
-    await expect(saveSelection(1, 'participants', { ...selections.participants, studyGroupIds: [], accountIds: [] }, 2)).rejects.toThrow('используются в событиях')
+    await expect(saveSelection(1, 'participants', { ...selections.participants, studyGroupIds: [], accountIds: [] })).rejects.toThrow('используются в событиях')
   })
   it('reports a missing supervisor without creating a guessed event', async () => {
     const db = initialDatabase(); db.supervisions = []; localStorage.setItem(managementStorageKey, JSON.stringify(db))
@@ -106,10 +121,30 @@ describe('persistent management repository', () => {
     expect(result.events[0].complete).toBe(false)
     expect(result.issues[0].code).toBe('MISSING_TEACHER')
   })
+  it('counts a teacher who also supervises the student once and keeps the event complete', async () => {
+    const db = initialDatabase()
+    const template = db['event-types'].find(t => t.id === 4)!
+    template.participantRoles.push('DISCIPLINE_TEACHER')
+    localStorage.setItem(managementStorageKey, JSON.stringify(db))
+    const result = await createEvents(1, { eventTypeId: 4, expectedVersion: 1, studyGroupIds: [1], studentIds: [], disciplineId: 1 })
+    const event = result.events[0]
+    expect(event.participants).toEqual([{ accountId: 1, role: 'STUDENT' }, { accountId: 2, role: 'SUPERVISOR' }])
+    expect(event.complete).toBe(true)
+    await updateEvent(event, { ...event, expectedVersion: event.version, participants: [
+      ...event.participants, { accountId: 2, role: 'DISCIPLINE_TEACHER' },
+    ] })
+    expect((await listEvents(1))[0]).toMatchObject({ participants: event.participants, complete: true })
+  })
 })
 
 describe('HTTP contract', () => {
   beforeEach(() => vi.stubEnv('VITE_MOCK_API', 'false'))
+  it('sends the version of the edited resource without substituting another version', async () => {
+    const rooms = initialDatabase().selections[1].rooms
+    const put = vi.spyOn(http, 'put').mockResolvedValue({ data: rooms })
+    await saveSelection(1, 'rooms', { ...rooms, sessionVersion: 4 })
+    expect(put).toHaveBeenCalledWith('/sessions/1/rooms', { roomIds: rooms.roomIds, expectedVersion: 4 })
+  })
   it('uses admin writes, catalog reads, and optimistic versions', async () => {
     const row = initialDatabase().groups[0]
     const request = vi.spyOn(http, 'request').mockResolvedValue({ data: row })

@@ -2,7 +2,7 @@ import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogCont
 import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { allRecords, errorMessage } from './repository'
-import { createEvents, listEvents, updateEvent, validateEvent } from './events'
+import { createEvents, listEvents, uniqueEventParticipants, updateEvent, validateEvent } from './events'
 import { DataTable, ErrorNotice, FormFields, useLoad, validateFields, type Field, type FormValues } from './components'
 import { getSelections, getSession, publicPeople } from './sessions'
 import { peopleOptions } from './university'
@@ -44,7 +44,7 @@ function EventsEditor({ data, reload }: { data: EventData; reload: () => void })
   </Stack>
 }
 function EventEditor({ event, data, onClose, onSaved }: { event: Schema['EventResponse']; data: EventData; onClose: () => void; onSaved: () => void }) {
-  const [value, setValue] = useState<Schema['UpdateEventRequest']>({ title: event.title, durationMinutes: event.durationMinutes, format: event.format, description: event.description, commissionSize: event.commissionSize, requiresChair: event.requiresChair, preparationDays: event.preparationDays, equipmentIds: event.equipmentIds, dependencies: structuredClone(event.dependencies), participants: structuredClone(event.participants), expectedVersion: event.version })
+  const [value, setValue] = useState<Schema['UpdateEventRequest']>({ title: event.title, durationMinutes: event.durationMinutes, format: event.format, description: event.description, commissionSize: event.commissionSize, requiresChair: event.requiresChair, preparationDays: event.preparationDays, equipmentIds: event.equipmentIds, dependencies: structuredClone(event.dependencies), participants: uniqueEventParticipants(event.participants), expectedVersion: event.version })
   const [pending, setPending] = useState(false), [error, setError] = useState('')
   const fields: Field[] = [{ name: 'title', label: 'Название', required: true }, { name: 'durationMinutes', label: 'Длительность, минут', type: 'number', min: 5, step: 5, required: true }, { name: 'format', label: 'Формат', type: 'select', options: Object.entries(formatLabels).map(([value, label]) => ({ value, label })) }, { name: 'commissionSize', label: 'Размер комиссии', type: 'number', min: 0, required: true }, { name: 'requiresChair', label: 'Нужен председатель', type: 'boolean' }, { name: 'preparationDays', label: 'Дни подготовки', type: 'number', min: 0, required: true }, { name: 'equipmentIds', label: 'Оборудование', type: 'multiple', options: data.equipment.map(e => ({ value: e.id, label: e.name })) }, { name: 'description', label: 'Описание' }]
   return <Dialog open fullWidth maxWidth="md" onClose={() => { if (!pending) onClose() }}><Box component="form" onSubmit={async e => {
@@ -52,7 +52,25 @@ function EventEditor({ event, data, onClose, onSaved }: { event: Schema['EventRe
     if (message || Object.keys(validateFields(fields, value)).length) { setError(message || 'Заполните обязательные поля.'); return }
     setPending(true); try { await updateEvent(event, value); onSaved() } catch (cause) { setError(errorMessage(cause)) } finally { setPending(false) }
   }}><DialogTitle>Редактировать событие</DialogTitle><DialogContent><Stack gap={2.5} sx={{ pt: 1 }}><ErrorNotice error={error} /><FormFields fields={fields} values={value} disabled={pending} onChange={(name, v) => setValue(old => ({ ...old, [name]: v }))} />
-    {(['STUDENT', 'DISCIPLINE_TEACHER', 'SUPERVISOR'] as const).map(role => <FormFields key={role} fields={[{ name: role, label: role === 'STUDENT' ? 'Студенты' : role === 'SUPERVISOR' ? 'Научные руководители' : 'Преподаватели дисциплины', type: 'multiple', options: peopleOptions(data.people.filter(p => p.role === (role === 'STUDENT' ? 'STUDENT' : 'TEACHER'))) }]} values={{ [role]: value.participants.filter(p => p.role === role).map(p => p.accountId) }} disabled={pending} onChange={(_, ids) => setValue(old => ({ ...old, participants: [...old.participants.filter(p => p.role !== role), ...(ids as number[]).map(accountId => ({ accountId, role }))] }))} />)}
+    {(['STUDENT', 'DISCIPLINE_TEACHER', 'SUPERVISOR'] as const).map(role => {
+      const label = role === 'STUDENT' ? 'Студенты' : role === 'SUPERVISOR' ? 'Научные руководители' : 'Преподаватели дисциплины'
+      const selected = value.participants.filter(p => p.role === role)
+      const otherRoles = new Set(value.participants.filter(p => p.role !== role).map(p => p.accountId))
+      const options = data.people.filter(person =>
+        person.role === (role === 'STUDENT' ? 'STUDENT' : 'TEACHER') && !otherRoles.has(person.id),
+      )
+      return <FormFields key={role} fields={[{ name: role, label, type: 'multiple', options: peopleOptions(options) }]}
+        values={{ [role]: selected.map(p => p.accountId) }} disabled={pending} onChange={(_, ids) => {
+          setValue(old => ({
+            ...old,
+            participants: uniqueEventParticipants([
+              ...old.participants.filter(p => p.role !== role),
+              ...(ids as number[]).map(accountId => ({ accountId, role })),
+            ]),
+          }))
+        }} />
+    })}
+    <Typography variant="body2" color="text.secondary">У каждого участника одна роль. Чтобы сменить её, сначала уберите участника из текущей роли.</Typography>
     <Typography variant="h5">Зависимости</Typography>{value.dependencies.map((d, index) => <Paper sx={{ p: 2 }} key={index}><Stack gap={1.5}><FormFields fields={[{ name: 'predecessorEventId', label: 'Предшествующее событие', type: 'select', options: data.events.filter(e => e.id !== event.id).map(e => ({ value: e.id, label: e.title })) }, { name: 'minGapDays', label: 'Минимум дней', type: 'number', min: 0, required: true }, { name: 'maxGapDays', label: 'Максимум дней (пусто — без ограничения)', type: 'number', min: 0 }]} values={d} disabled={pending} onChange={(name, v) => setValue(old => ({ ...old, dependencies: old.dependencies.map((dep, i) => i === index ? { ...dep, [name]: name === 'maxGapDays' && v === '' ? null : v } : dep) }))} /><Button disabled={pending} color="error" onClick={() => setValue(old => ({ ...old, dependencies: old.dependencies.filter((_, i) => i !== index) }))}>Убрать зависимость</Button></Stack></Paper>)}
     <Button disabled={pending || data.events.length < 2} onClick={() => setValue(old => ({ ...old, dependencies: [...old.dependencies, { predecessorEventId: data.events.find(e => e.id !== event.id)!.id, minGapDays: 0, maxGapDays: null }] }))}>Добавить зависимость</Button>
   </Stack></DialogContent><DialogActions><Button disabled={pending} onClick={onClose}>Отмена</Button><Button type="submit" variant="contained" disabled={pending}>Сохранить событие</Button></DialogActions></Box></Dialog>

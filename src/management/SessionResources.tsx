@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { allRecords, errorMessage } from './repository'
 import { ErrorNotice, FormFields, useLoad } from './components'
-import { getSelections, publicPeople, saveSelection, type Selection, type SelectionKind } from './sessions'
+import { acceptSelectionSave, getSelections, publicPeople, saveSelection, type Selection, type SelectionKind } from './sessions'
 import { peopleOptions } from './university'
 import type { Schema } from './types'
 
@@ -13,20 +13,25 @@ export function SessionResources({ session }: { session: Schema['PlanningSession
     return { selection, people, groups, rooms }
   }, [session.id])
   const state = useLoad(load)
-  return <Stack gap={2.5}><ErrorNotice error={state.error} retry={state.reload} />{state.loading && <CircularProgress aria-label="Загрузка участников и ресурсов" />}{state.data && <ResourceEditor key={session.id} data={state.data} version={session.version} />}</Stack>
+  return <Stack gap={2.5}><ErrorNotice error={state.error} retry={state.reload} />{state.loading && <CircularProgress aria-label="Загрузка участников и ресурсов" />}{state.data && <ResourceEditor key={session.id} data={state.data} reload={state.reload} />}</Stack>
 }
 type ResourceData = { selection: Selection; people: Schema['PersonSummary'][]; groups: Schema['UniversityGroupResponse'][]; rooms: Schema['UniversityRoomResponse'][] }
-function ResourceEditor({ data, version }: { data: ResourceData; version: number }) {
-  const [selection, setSelection] = useState(() => structuredClone(data.selection)), [currentVersion, setVersion] = useState(Math.max(version, ...Object.values(data.selection).map(s => s.sessionVersion)))
+function ResourceEditor({ data, reload }: { data: ResourceData; reload: () => void }) {
+  const [selection, setSelection] = useState(() => structuredClone(data.selection))
   const [pending, setPending] = useState(false), [error, setError] = useState(''), [success, setSuccess] = useState('')
   const id = selection.participants.sessionId
   const save = async (kind: SelectionKind) => {
     setPending(true); setError(''); setSuccess('')
-    try { const saved = await saveSelection(id, kind, selection[kind], currentVersion); setVersion(saved.sessionVersion); setSelection(s => ({ ...s, [kind]: saved })); setSuccess('Выбранный раздел сохранён.') } catch (e) { setError(errorMessage(e)) } finally { setPending(false) }
+    const draft = selection[kind]
+    try {
+      const saved = await saveSelection(id, kind, draft)
+      setSelection(current => acceptSelectionSave(current, kind, saved, draft.sessionVersion))
+      setSuccess('Выбранный раздел сохранён.')
+    } catch (e) { setError(errorMessage(e)) } finally { setPending(false) }
   }
   const teachers = data.people.filter(p => p.role === 'TEACHER')
   const candidates = selection.commission.candidates
-  return <Stack gap={2.5}><ErrorNotice error={error} />{success && <Alert severity="success" onClose={() => setSuccess('')}>{success}</Alert>}
+  return <Stack gap={2.5}><ErrorNotice error={error} retry={reload} />{success && <Alert severity="success" onClose={() => setSuccess('')}>{success}</Alert>}
     <Alert severity="info">Пользователей и аудитории добавляет администратор в данных вуза. Каждый раздел сохраняется отдельно.</Alert>
     <Paper sx={{ p: 3 }}><Stack gap={2.5}><Typography variant="h5">Участники</Typography><FormFields fields={[
       { name: 'studyGroupIds', label: 'Группы', type: 'multiple', options: data.groups.filter(g => g.active || selection.participants.studyGroupIds.includes(g.id)).map(g => ({ value: g.id, label: g.name })) },

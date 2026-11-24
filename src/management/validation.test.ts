@@ -45,6 +45,22 @@ describe('session wall times', () => {
   it('rejects collection ending exactly at the start of the period', () => {
     expect(validateSession({ ...values, collectionEndsAt: '2026-06-15T00:00' }).collectionEndsAt).toBeTruthy()
   })
+  it('preserves exact session boundaries on rename and accepts a same-day collection deadline before start', () => {
+    const original = {
+      ...initialDatabase().sessions[0],
+      startsAt: '2026-06-15T06:00:12.345Z',
+      endsAt: '2026-06-15T12:00:20Z',
+      collectionEndsAt: '2026-06-15T05:00:00Z',
+    }
+    const renamed = { ...sessionDefaults(original), name: 'Новое название' }
+    expect(validateSession(renamed, original)).toEqual({})
+    expect(sessionPayload(renamed, original)).toMatchObject({
+      name: renamed.name, startsAt: original.startsAt, endsAt: original.endsAt,
+      collectionEndsAt: original.collectionEndsAt,
+    })
+    expect(validateSession({ ...renamed, collectionEndsAt: '2026-06-15T09:01' }, original).collectionEndsAt).toBeTruthy()
+    expect(sessionPayload({ ...renamed, lastDay: '2026-06-16' }, original).endsAt).toBe('2026-06-16T12:00:00.000Z')
+  })
   it('rejects reversed periods, work hours and invalid zones', () => {
     expect(validateSession({ ...values, lastDay: '2026-06-01', workingDayEnd: '08:00', timeZone: 'Mars/City' })).toMatchObject({ lastDay: expect.any(String), workingDayEnd: expect.any(String), timeZone: expect.any(String) })
   })

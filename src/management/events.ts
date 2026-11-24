@@ -3,6 +3,17 @@ import { assertVersion, readDatabase, writeDatabase } from './repository'
 import { ownedSession } from './sessions'
 import { personName, type Page, type Schema } from './types'
 
+export function uniqueEventParticipants(participants: Schema['EventParticipant'][]): Schema['EventParticipant'][] {
+  const byAccount = new Map<number, Schema['EventParticipant']>()
+  for (const participant of participants) {
+    const existing = byAccount.get(participant.accountId)
+    if (!existing || existing.role === 'DISCIPLINE_TEACHER' && participant.role === 'SUPERVISOR') {
+      byAccount.set(participant.accountId, participant)
+    }
+  }
+  return [...byAccount.values()]
+}
+
 export async function listEvents(id: number): Promise<Schema['EventResponse'][]> {
   if (isMockMode()) { const db = readDatabase(); ownedSession(db, id); return structuredClone(db.events.filter(e => e.sessionId === id)) }
   const rows: Schema['EventResponse'][] = []
@@ -23,11 +34,11 @@ export async function createEvents(id: number, input: Schema['CreateEventsReques
     const supervisors = db.supervisions.filter(s => target.students.includes(s.studentId))
     if (type.participantRoles.includes('SUPERVISOR') && target.students.some(studentId => !supervisors.some(s => s.studentId === studentId))) { issues.push({ code: 'MISSING_SUPERVISOR', severity: 'ERROR', message: `${target.label}: не указан научный руководитель; событие не создано.`, accountIds: target.students, eventIds: [], roomIds: [] }); continue }
     const teachers = db.teachings.filter(t => t.groupId === target.groupId && t.disciplineId === input.disciplineId).map(t => t.teacherId)
-    const participants: Schema['EventParticipant'][] = [
+    const participants = uniqueEventParticipants([
       ...target.students.map(accountId => ({ accountId, role: 'STUDENT' as const })),
       ...(type.participantRoles.includes('SUPERVISOR') ? supervisors.map(s => ({ accountId: s.supervisorId, role: 'SUPERVISOR' as const })) : []),
       ...(type.participantRoles.includes('DISCIPLINE_TEACHER') ? teachers.map(accountId => ({ accountId, role: 'DISCIPLINE_TEACHER' as const })) : []),
-    ].filter((p, index, all) => all.findIndex(other => other.accountId === p.accountId && other.role === p.role) === index)
+    ])
     const eventId = Math.max(0, ...db.events.map(e => e.id)) + 1
     const event: Schema['EventResponse'] = { id: eventId, version: 1, sessionId: id, eventTypeId: type.id, title: `${type.name} · ${target.label}`, studyGroupId: target.groupId, disciplineId: input.disciplineId ?? null, durationMinutes: type.defaultDurationMinutes, format: type.defaultFormat, granularity: type.granularity, commissionSize: type.commissionSize, requiresChair: type.requiresChair, equipmentIds: [...type.equipmentIds], preparationDays: type.preparationDays, description: null, participants, complete: !type.participantRoles.includes('DISCIPLINE_TEACHER') || teachers.length > 0,
       dependencies: type.dependencies.flatMap(d => db.events.filter(e => e.sessionId === id && e.eventTypeId === d.predecessorTypeId && e.participants.some(p => p.role === 'STUDENT' && target.students.includes(p.accountId))).map(e => ({ predecessorEventId: e.id, minGapDays: d.minGapDays, maxGapDays: d.maxGapDays }))),
@@ -61,6 +72,7 @@ export function validateEvent(input: Schema['UpdateEventRequest'], event: Schema
   return visit(event.id) ? 'Зависимости событий образуют цикл.' : ''
 }
 export async function updateEvent(event: Schema['EventResponse'], input: Schema['UpdateEventRequest']): Promise<void> {
+  input = { ...input, participants: uniqueEventParticipants(input.participants) }
   if (!isMockMode()) { await http.put(`/sessions/${event.sessionId}/events/${event.id}`, input); return }
   const db = readDatabase(), session = ownedSession(db, event.sessionId), current = db.events.find(e => e.id === event.id)
   if (!current) throw new Error('Событие не найдено.')
@@ -71,6 +83,12 @@ export async function updateEvent(event: Schema['EventResponse'], input: Schema[
   void _version
   const requiredRoles = db.eventRoles[current.id] ?? [...new Set(current.participants.map(p => p.role))]
   if (JSON.stringify(current.dependencies) !== JSON.stringify(input.dependencies)) db.eventDependencies[current.id] = null
-  Object.assign(current, fields, { version: current.version + 1, complete: input.participants.some(p => p.role === 'STUDENT') && requiredRoles.every(role => input.participants.some(p => p.role === role)) })
+  const coversRole = (role: Schema['ParticipantRole']) => input.participants.some(participant =>
+    participant.role === role ||
+    role === 'DISCIPLINE_TEACHER' && participant.role === 'SUPERVISOR' &&
+      db.teachings.some(link => link.teacherId === participant.accountId &&
+        link.disciplineId === current.disciplineId && link.groupId === current.studyGroupId),
+  )
+  Object.assign(current, fields, { version: current.version + 1, complete: coversRole('STUDENT') && requiredRoles.every(coversRole) })
   session.version++; session.inputVersion++; writeDatabase(db)
 }
