@@ -20,8 +20,5 @@ export const qualityLabels = {
 }
 
 export const isActiveJob = (job: SolverJob) => job.status === 'QUEUED' || job.status === 'RUNNING'
-export const personName = (person: { firstName: string; lastName: string; patronymic: string | null }) =>
-  [person.lastName, person.firstName, person.patronymic].filter(Boolean).join(' ')
-
 export const place = (room: Assignment['room'], format: Assignment['format']) =>
   [room?.building, room?.name].filter(Boolean).join(' · ') || (format === 'ONLINE' ? 'Онлайн' : 'Место не указано')
