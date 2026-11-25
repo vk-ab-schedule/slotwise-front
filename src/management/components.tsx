@@ -1,5 +1,5 @@
 import { Alert, Box, Button, Checkbox, FormControlLabel, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Typography } from '@mui/material'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { errorMessage } from './repository'
 
 export function PageHeading({ title, subtitle }: { title: string; subtitle: string }) {
@@ -12,6 +12,7 @@ export function useLoad<T>(load: () => Promise<T>) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [revision, setRevision] = useState(0)
+  const reload = useCallback(() => setRevision(value => value + 1), [])
   useEffect(() => {
     let active = true
     setLoading(true)
@@ -20,7 +21,7 @@ export function useLoad<T>(load: () => Promise<T>) {
     void load().then(value => { if (active) setData(value) }, cause => { if (active) setError(errorMessage(cause)) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [load, revision])
-  return { data, loading, error, reload: () => setRevision(value => value + 1) }
+  return { data, loading, error, reload }
 }
 
 export function ErrorNotice({ error, retry }: { error: string; retry?: () => void }) {

@@ -1,4 +1,4 @@
-import { CircularProgress, Stack, Typography } from '@mui/material'
+import { Alert, CircularProgress, Stack, Typography } from '@mui/material'
 import { observer } from 'mobx-react-lite'
 import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
@@ -15,6 +15,9 @@ import { NewSessionPage, SessionDetailPage, SessionsPage } from './management/Se
 import { SessionResources } from './management/SessionResources'
 import { SessionEvents } from './management/SessionEvents'
 import { SessionRules } from './management/SessionRules'
+import { isMockMode } from './api/http'
+import { OrganizerSchedulePage } from './schedule/OrganizerSchedulePage'
+import { PersonalSchedulePage } from './schedule/PersonalSchedulePage'
 
 function Home() {
   const role = authStore.user?.role
@@ -25,6 +28,10 @@ function Protected({ children }: { children: React.ReactNode }) {
   return authStore.isAuthenticated ? children : <Navigate to="/login" replace />
 }
 
+function DemoSchedule({ children }: { children: React.ReactNode }) {
+  return isMockMode() ? children : <Alert severity="info">Расписание пока доступно в демо-режиме.</Alert>
+}
+
 export const App = observer(function App() {
   useEffect(() => { void authStore.restore() }, [])
   if (authStore.loading) return <Stack alignItems="center" justifyContent="center" minHeight="100vh" gap={2}><CircularProgress /><Typography>Загрузка SlotWise…</Typography></Stack>
@@ -33,7 +40,7 @@ export const App = observer(function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<Protected><Home /></Protected>} />
       <Route path="/availability" element={<Protected><AvailabilityPage /></Protected>} />
-      <Route path="/schedule" element={<Protected><MockupPage screenId="3:306" /></Protected>} />
+      <Route path="/schedule" element={<Protected><DemoSchedule><PersonalSchedulePage /></DemoSchedule></Protected>} />
       <Route path="/requests" element={<Protected><MockupPage screenId="3:559" /></Protected>} />
       <Route path="/organizer/sessions" element={<Protected><RoleGate role="ORGANIZER"><SessionsPage /></RoleGate></Protected>} />
       <Route path="/organizer/sessions/new" element={<Protected><RoleGate role="ORGANIZER"><NewSessionPage /></RoleGate></Protected>} />
@@ -41,7 +48,7 @@ export const App = observer(function App() {
       <Route path="/organizer/sessions/:id/resources" element={<Protected><RoleGate role="ORGANIZER"><SessionDetailPage tab="resources">{session => <SessionResources session={session} />}</SessionDetailPage></RoleGate></Protected>} />
       <Route path="/organizer/sessions/:id/events" element={<Protected><RoleGate role="ORGANIZER"><SessionDetailPage tab="events">{session => <SessionEvents session={session} />}</SessionDetailPage></RoleGate></Protected>} />
       <Route path="/organizer/sessions/:id/rules" element={<Protected><RoleGate role="ORGANIZER"><SessionDetailPage tab="rules">{session => <SessionRules session={session} />}</SessionDetailPage></RoleGate></Protected>} />
-      <Route path="/organizer/schedule" element={<Protected><MockupPage screenId="4:754" /></Protected>} />
+      <Route path="/organizer/schedule/:id?" element={<Protected><RoleGate role="ORGANIZER"><DemoSchedule><OrganizerSchedulePage /></DemoSchedule></RoleGate></Protected>} />
       <Route path="/organizer/requests" element={<Protected><MockupPage screenId="4:1107" /></Protected>} />
       <Route path="/organizer/scenarios" element={<Protected><MockupPage screenId="4:1288" /></Protected>} />
       <Route path="/admin/university" element={<Protected><RoleGate role="ADMIN"><UniversityPage /></RoleGate></Protected>} />
