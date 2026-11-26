@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ErrorNotice, PageHeading, useLoad } from '../management/components'
 import { CalculationPanel } from './CalculationPanel'
 import { dayLabel } from './dates'
-import { scheduleDemo } from './demoRepository'
+import { scheduleRepository } from './repository'
 import { algorithmLabels, variantLabels, type Session } from './model'
 import { VariantView } from './VariantView'
 import { localDate } from '../availability/time'
@@ -14,7 +14,7 @@ const path = '/organizer/schedule'
 export function OrganizerSchedulePage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const load = useCallback(() => scheduleDemo.listSessions(), [])
+  const load = useCallback(() => scheduleRepository.listSessions(), [])
   const sessions = useLoad(load)
   const session = id === undefined ? sessions.data?.[0] : sessions.data?.find(session => String(session.id) === id)
   return <>
@@ -32,24 +32,16 @@ export function OrganizerSchedulePage() {
           </Stack>
       )}
       {!session && sessions.data && id !== undefined && <Alert severity="error">Сессия не найдена или недоступна.</Alert>}
-      {session && <ScheduleWorkspace key={session.id} id={session.id} />}
+      {session && <ScheduleWorkspace key={session.id} session={session} />}
     </Stack>
   </>
 }
 
-function ScheduleWorkspace({ id }: { id: number }) {
-  const load = useCallback(() => loadWorkspaceConfig(id), [id])
-  const configuration = useLoad(load)
-  return <>
-    <ErrorNotice error={configuration.error} retry={configuration.reload} />
-    {configuration.loading && <CircularProgress aria-label="Загрузка параметров расчёта" />}
-    {configuration.data && <ScheduleWorkspaceContent {...configuration.data} reload={configuration.reload} />}
-  </>
-}
-
-function ScheduleWorkspaceContent({ session, rules, solvers, job, reload }: Awaited<ReturnType<typeof loadWorkspaceConfig>> & { reload: () => void }) {
+function ScheduleWorkspace({ session }: { session: Session }) {
+  const loadConfig = useCallback(() => loadWorkspaceConfig(session.id), [session.id])
+  const configuration = useLoad(loadConfig)
   const [selected, setSelected] = useState<number>()
-  const load = useCallback(() => scheduleDemo.listVariants(session.id), [session.id])
+  const load = useCallback(() => scheduleRepository.listVariants(session.id), [session.id])
   const variants = useLoad(load)
   const refreshVariants = variants.reload
   const selectResult = useCallback((id: number) => {
@@ -57,29 +49,37 @@ function ScheduleWorkspaceContent({ session, rules, solvers, job, reload }: Awai
     refreshVariants()
   }, [refreshVariants])
   const variantId = variants.data?.find(variant => variant.id === selected)?.id ?? variants.data?.[0]?.id
+  const reload = () => {
+    configuration.reload()
+    refreshVariants()
+  }
+  const config = configuration.data
+  const currentSession = config?.session ?? session
   return <>
-    <CalculationPanel session={session} rules={rules} solvers={solvers} initialJob={job} onResult={selectResult} />
-    <ErrorNotice error={variants.error} retry={variants.reload} />
+    <ErrorNotice error={configuration.error && `Расчёт: ${configuration.error}`} retry={configuration.reload} />
+    {configuration.loading && <CircularProgress aria-label="Загрузка параметров расчёта" />}
+    {config && <CalculationPanel session={config.session} rules={config.rules} solvers={config.solvers} initialJob={config.job} onResult={selectResult} />}
+    <ErrorNotice error={variants.error && `Варианты расписания: ${variants.error}`} retry={variants.reload} />
     {variants.loading && <CircularProgress aria-label="Загрузка вариантов расписания" />}
     {variants.data && (variants.data.length ? <Stack direction={{ xs: 'column', sm: 'row' }} gap={1.5}>
       <TextField select label="Вариант" value={variantId ?? ''} onChange={event => setSelected(Number(event.target.value))} sx={{ minWidth: 260 }}>
         {variants.data.map(variant => <MenuItem key={variant.id} value={variant.id}>
-          №{variant.id} · {variantLabels[variant.status]} · {algorithmLabels[variant.algorithm]} · {dayLabel(localDate(variant.createdAt, session.timeZone), { day: 'numeric', month: 'short' })}
+          №{variant.id} · {variantLabels[variant.status]} · {algorithmLabels[variant.algorithm]} · {dayLabel(localDate(variant.createdAt, currentSession.timeZone), { day: 'numeric', month: 'short' })}
         </MenuItem>)}
       </TextField>
       <Button onClick={reload}>Обновить данные</Button>
     </Stack> : <Alert severity="info" action={<Button onClick={reload}>Обновить</Button>}>У сессии ещё нет вариантов. Проверьте данные и запустите расчёт.</Alert>)}
-    {variantId !== undefined && <LoadedVariant key={variantId} id={variantId} session={session} />}
+    {variantId !== undefined && <LoadedVariant key={variantId} id={variantId} session={currentSession} />}
   </>
 }
 
 async function loadWorkspaceConfig(id: number) {
-  const [config, solvers, job] = await Promise.all([scheduleDemo.getSession(id), scheduleDemo.listSolvers(), scheduleDemo.latestJob(id)])
+  const [config, solvers, job] = await Promise.all([scheduleRepository.getSession(id), scheduleRepository.listSolvers(), scheduleRepository.latestJob(id)])
   return { ...config, solvers, job }
 }
 
 function LoadedVariant({ id, session }: { id: number; session: Session }) {
-  const load = useCallback(() => scheduleDemo.getVariant(id), [id])
+  const load = useCallback(() => scheduleRepository.getVariant(id), [id])
   const state = useLoad(load)
   return <>
     <ErrorNotice error={state.error} retry={state.reload} />
