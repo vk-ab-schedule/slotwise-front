@@ -116,6 +116,27 @@ describe('persistent management repository', () => {
     expect(await listEvents(1)).toEqual([event])
     expect(readDatabase().sessions[0].version).toBe(2)
   })
+  it.each([
+    { name: 'disabled', enabled: false, role: 'TEACHER' },
+    { name: 'no longer a teacher', enabled: true, role: 'ORGANIZER' },
+  ] as const)('keeps the event incomplete when the linked supervisor is $name', async ({ enabled, role }) => {
+    const db = initialDatabase()
+    const link = db.supervisions[0]
+    const supervisor = db.accounts.find(account => account.id === link.supervisorId)!
+    supervisor.enabled = enabled
+    supervisor.role = role
+    localStorage.setItem(managementStorageKey, JSON.stringify(db))
+
+    const result = await createEvents(1, { eventTypeId: 5, expectedVersion: 1, studyGroupIds: [1], studentIds: [] })
+    expect(result.events).toHaveLength(1)
+    const [event] = result.events
+    expect(event).toMatchObject({ complete: false, participants: [{ accountId: link.studentId, role: 'STUDENT' }] })
+    expect(result.issues).toEqual([expect.objectContaining({
+      code: 'MISSING_SUPERVISOR', severity: 'WARNING', accountIds: [link.studentId], eventIds: [event.id],
+    })])
+    expect(readDatabase().supervisions).toContainEqual(link)
+    expect(await listEvents(1)).toEqual([event])
+  })
   it('resolves template dependencies even when a defense was created first', async () => {
     await createEvents(1, { eventTypeId: 5, expectedVersion: 1, studyGroupIds: [1], studentIds: [] })
     await createEvents(1, { eventTypeId: 4, expectedVersion: 2, studyGroupIds: [1], studentIds: [] })

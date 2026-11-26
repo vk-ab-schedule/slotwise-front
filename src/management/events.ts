@@ -30,8 +30,10 @@ export async function createEvents(id: number, input: Schema['CreateEventsReques
   const studentIds = [...new Set([...input.studentIds, ...groups.flatMap(g => g.studentIds)])]
   const targets = type.granularity === 'PER_GROUP' ? groups.map(g => ({ label: g.name, students: g.studentIds, groupId: g.id })) : studentIds.map(studentId => ({ label: personName(db.accounts.find(a => a.id === studentId)!), students: [studentId], groupId: db.groups.find(g => g.studentIds.includes(studentId))?.id ?? null }))
   const issues: Schema['ApiIssue'][] = [], events: Schema['EventResponse'][] = []
+  const activeTeacherIds = new Set(db.accounts.filter(account => account.enabled && account.role === 'TEACHER').map(account => account.id))
+  const supervisorLinks = db.supervisions.filter(link => activeTeacherIds.has(link.supervisorId))
   for (const target of targets) {
-    const supervisors = db.supervisions.filter(s => target.students.includes(s.studentId))
+    const supervisors = supervisorLinks.filter(link => target.students.includes(link.studentId))
     const missingSupervisors = type.participantRoles.includes('SUPERVISOR')
       ? target.students.filter(studentId => !supervisors.some(s => s.studentId === studentId))
       : []
