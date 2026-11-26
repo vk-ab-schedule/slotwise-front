@@ -13,13 +13,13 @@ export interface paths {
         };
         /**
          * Find accounts
-         * @description ADMIN. Search by name or email; optionally filter by role and enabled status.
+         * @description ADMIN. Search by a part of the full name or email, ignoring case; optionally filter by role and enabled status. Sorted by last name, first name and id.
          */
         get: operations["listAccounts"];
         put?: never;
         /**
          * Create an account
-         * @description ADMIN. Creates an enabled account without a password. Email must be unique; set the password through the dedicated operation.
+         * @description ADMIN. Creates an enabled account without a password; set the password through the dedicated operation. Email is stored in lower case and is unique ignoring case. A taken email or externalId returns 409 EMAIL_TAKEN or EXTERNAL_ID_TAKEN with accountId of the existing account.
          */
         post: operations["createAccount"];
         delete?: never;
@@ -47,7 +47,7 @@ export interface paths {
         head?: never;
         /**
          * Update the account profile
-         * @description ADMIN. Replaces all editable profile fields; externalId and patronymic may be null. Role, enabled status and password have dedicated operations. A stale version returns 409.
+         * @description ADMIN. Replaces all editable profile fields; externalId and patronymic may be null. Role, enabled status and password have dedicated operations. A stale version returns 409 STALE_ACCOUNT_VERSION; a taken email or externalId is handled as in createAccount.
          */
         patch: operations["updateAccount"];
         trace?: never;
@@ -62,7 +62,7 @@ export interface paths {
         get?: never;
         /**
          * Enable or disable the account
-         * @description ADMIN. Ends the account's active login sessions. The last active administrator cannot be disabled. A stale version returns 409.
+         * @description ADMIN. Disabling ends the account's active login sessions. The last active administrator cannot be disabled: 409 LAST_ACTIVE_ADMIN. A stale version returns 409 STALE_ACCOUNT_VERSION.
          */
         put: operations["setAccountEnabled"];
         post?: never;
@@ -82,7 +82,7 @@ export interface paths {
         get?: never;
         /**
          * Set or reset the account password
-         * @description ADMIN. Accepts the new password as input only; never returns a password or its hash. A stale version returns 409.
+         * @description ADMIN. Accepts up to 72 UTF-8 bytes. An oversized password returns 400 VALIDATION_FAILED. The password and its hash are never returned. Ends the account's login sessions except the caller's own; the account version does not change, and hasPassword becomes true. A stale version returns 409 STALE_ACCOUNT_VERSION.
          */
         put: operations["setAccountPassword"];
         post?: never;
@@ -102,9 +102,29 @@ export interface paths {
         get?: never;
         /**
          * Change the account role
-         * @description ADMIN. Ends the account's active login sessions. Changing one's own role or leaving the system without an active administrator is forbidden. A stale version returns 409.
+         * @description ADMIN. Ends the account's active login sessions. Changing one's own role is 403 OWN_ROLE_CHANGE; leaving the system without an active administrator is 409 LAST_ACTIVE_ADMIN. Use listAccountRoleImpact before confirmation. A stale version returns 409 STALE_ACCOUNT_VERSION.
          */
         put: operations["setAccountRole"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/accounts/{id}/role-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview planning sessions affected by a role change
+         * @description ADMIN. Shows sessions the account organizes or participates in before confirming a role change.
+         */
+        get: operations["listAccountRoleImpact"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -123,7 +143,7 @@ export interface paths {
         put?: never;
         /**
          * Сгенерировать и загрузить демо-данные вуза
-         * @description Доступно только администратору. Используется для подготовки демонстрации системы на синтетических данных. В dataset выбирается профиль: S — малый, M — средний, L — большой, TIGHT — с урезанной доступностью. Обязательный seed позволяет воспроизвести набор при одинаковых настройках генератора. Сгенерированные данные используют тот же контракт JSON-импорта данных вуза. Сейчас операция является заглушкой и возвращает 501 NOT_IMPLEMENTED; данные не создаются.
+         * @description Доступно только администратору. Используется для подготовки демонстрации системы на синтетических данных. В dataset выбирается профиль: S — малый, M — средний, L — большой, TIGHT — с урезанной доступностью. Обязательный seed позволяет воспроизвести набор при одинаковых настройках генератора. Разные пары профиля и seed создают отдельные наборы; повторный импорт той же пары не создаёт дублей. Данные записываются через тот же сервис, что и JSON-импорт.
          */
         post: operations["generateUniversityDemoData"];
         delete?: never;
@@ -257,7 +277,7 @@ export interface paths {
         put?: never;
         /**
          * Preview or apply university JSON
-         * @description References use external IDs. Dry run previews counts and diagnostics without applying changes. Apply uses external IDs for idempotent upsert; valid records may be applied despite errors only with explicit allowPartial=true. Diagnostics never echo credentials.
+         * @description Dry run previews changes without writing to the database. Accounts, groups, rooms and disciplines match by external ID; links and timetable rows match by their fields. Apply can persist valid records despite domain errors only with allowPartial=true. A role change for a planning participant is reported as a warning. Invalid JSON or DTO fields return 400. Diagnostics never echo credentials.
          */
         post: operations["importUniversityData"];
         delete?: never;
@@ -531,7 +551,7 @@ export interface paths {
         };
         /**
          * Poll calculation status and progress
-         * @description ORGANIZER owner of the job's session only; inaccessible jobs return 404. QUEUED, RUNNING, COMPLETED, FAILED and CANCELLED describe execution, while solveStatus describes the solver result. COMPLETED may have NO_SOLUTION and a null resultId; only FAILED denotes a technical error. A completed feasible or optimal result links to a draft variant. Unavailable progress, queue position, error, result and timestamps are explicit nulls.
+         * @description ORGANIZER owner of the job's session only; inaccessible jobs return 404. QUEUED, RUNNING, COMPLETED, FAILED and CANCELLED describe execution, while solveStatus describes the solver result. COMPLETED may have NO_SOLUTION and a null resultId; only FAILED denotes a technical error. A completed feasible or optimal result links to a draft variant. Unavailable progress, quality, queue position, error, result and timestamps are explicit nulls.
          */
         get: operations["getSolverJob"];
         put?: never;
@@ -877,7 +897,7 @@ export interface paths {
         put?: never;
         /**
          * Queue a manual calculation
-         * @description ORGANIZER owner only. Snapshots input at expectedInputVersion; a version mismatch is 409. May run before collection closes; such results are marked incomplete and retain missing respondents. Reuses an identical request for the same session, input version, algorithm and parameters; if the session already has an active calculation, returns that job. Otherwise queues a job with its queue position. Any signed seed is valid. Optional baseVariantId must belong to this session; its assignments provide the baseline for S5 and its locks enforce H9. Poll getSolverJob for progress. Completion creates a validated draft when a solution exists; it never publishes automatically. A time limit without a solution is NO_SOLUTION, not a proof of infeasibility or a technical failure.
+         * @description ORGANIZER owner only. Snapshots input at expectedInputVersion; a version mismatch is 409. May run before collection closes; such results are marked incomplete and retain missing respondents. Reuses an identical request for the same session, input version, algorithm and parameters; if the session already has an active calculation, returns that job. Otherwise queues a job with its queue position. Any signed seed is valid. Optional baseVariantId must belong to this session; its assignments provide the baseline for S5 and its locks enforce H9. Poll getSolverJob for progress and best known quality (unassigned events, then penalty). Completion creates a validated draft when a solution exists; it never publishes automatically. A time limit without a solution is NO_SOLUTION, not a proof of infeasibility or a technical failure.
          */
         post: operations["solveSession"];
         delete?: never;
@@ -1171,7 +1191,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List timetable */
+        /**
+         * List timetable
+         * @description Returns entries overlapping the requested interval [startsAt, endsAt). Each boundary is optional. When both are present, startsAt must precede endsAt.
+         */
         get: operations["listUniversityTimetable"];
         put?: never;
         post?: never;
@@ -1306,6 +1329,11 @@ export interface components {
         };
         /** @enum {string} */
         AccountRole: "ADMIN" | "ORGANIZER" | "TEACHER" | "STUDENT";
+        AccountRoleImpactSession: {
+            /** Format: int64 */
+            id?: number;
+            name: string;
+        };
         ApiIssue: {
             accountIds: number[];
             code: string;
@@ -1315,6 +1343,11 @@ export interface components {
             severity: components["schemas"]["IssueSeverity"];
         };
         ApiProblem: {
+            /**
+             * Format: int64
+             * @description Present for EMAIL_TAKEN and EXTERNAL_ID_TAKEN: the account that already has the value
+             */
+            accountId?: number;
             code: string;
             detail: string;
             /** @description Present for field validation errors */
@@ -2117,7 +2150,10 @@ export interface components {
         SetAccountPasswordRequest: {
             /** Format: int64 */
             expectedVersion: number;
-            /** Format: password */
+            /**
+             * Format: password
+             * @description At most 72 bytes in UTF-8.
+             */
             password: string;
         };
         SetAccountRoleRequest: {
@@ -2157,6 +2193,18 @@ export interface components {
             code: string;
             message: string;
         };
+        /** @description Solutions are compared by unassignedEvents first, then by penalty */
+        SolverJobQuality: {
+            /**
+             * Format: int64
+             * @description Lower bound on penalty at this unassigned event count, if available
+             */
+            bestBound: number | null;
+            /** Format: int64 */
+            penalty: number;
+            /** Format: int32 */
+            unassignedEvents: number;
+        };
         /** @description Execution lifecycle is separate from solveStatus: COMPLETED + NO_SOLUTION is valid, with no result variant and no technical error. All polling fields are present, including nulls. */
         SolverJobResponse: {
             algorithm: components["schemas"]["SolverAlgorithm"];
@@ -2180,6 +2228,8 @@ export interface components {
              * @description Fraction in [0, 1], or null when the solver cannot estimate progress
              */
             progress: number | null;
+            /** @description Best solution currently known for this job; null until a solution is found */
+            quality: components["schemas"]["SolverJobQuality"] | null;
             /**
              * Format: int32
              * @description One-based position while queued; null outside the queue
@@ -2271,7 +2321,7 @@ export interface components {
             externalId: string;
             firstName: string;
             lastName: string;
-            /** @description Optional Spring {algorithm}hash; omitted means login is disabled */
+            /** @description Spring {bcrypt} hash. Unsupported hashes are reported for the individual account. Omit to create an account without login or keep its existing hash. */
             passwordHash?: string;
             patronymic?: string | null;
             role: components["schemas"]["AccountRole"];
@@ -2445,7 +2495,7 @@ export interface components {
             /** @example Europe/Moscow */
             timeZone: string;
         };
-        /** @description Replace the complete editable event form. Dependencies must remain acyclic; business validation is implemented by B5. */
+        /** @description Replace the complete editable event form. Dependencies must remain acyclic. */
         UpdateEventRequest: {
             /** Format: int32 */
             commissionSize: number;
@@ -2728,15 +2778,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     createAccount: {
@@ -2824,15 +2865,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     getAccount: {
@@ -2911,15 +2943,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3016,15 +3039,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     setAccountEnabled: {
@@ -3114,15 +3128,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     setAccountPassword: {
@@ -3203,15 +3208,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3308,8 +3304,84 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
+        };
+    };
+    listAccountRoleImpact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountRoleImpactSession"][];
+                };
+            };
+            /** @description Invalid JSON, parameters or DTO fields */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Authentication required or credentials rejected */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Insufficient permissions or invalid CSRF token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Resource not found or not accessible */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Concurrent modification, duplicate or invalid current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Domain constraints violated; see issues */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3397,15 +3469,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4358,15 +4421,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5610,15 +5664,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     createEventType: {
@@ -5793,15 +5838,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6118,7 +6154,7 @@ export interface operations {
                     "application/json": components["schemas"]["PersonalScheduleResponse"];
                 };
             };
-            /** @description Invalid JSON, parameters or DTO fields */
+            /** @description Returns INVALID_SCHEDULE_RANGE when from >= to. Missing or malformed date parameters return INVALID_REQUEST. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6276,15 +6312,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     createSession: {
@@ -6365,15 +6392,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6466,15 +6484,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     updateSession: {
@@ -6557,15 +6566,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7184,15 +7184,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     replaceCommissionPool: {
@@ -7282,15 +7273,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     listSessionEvents: {
@@ -7372,15 +7354,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7477,15 +7450,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     getSessionEvent: {
@@ -7565,15 +7529,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7671,15 +7626,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     deleteSessionEvent: {
@@ -7759,15 +7705,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7860,15 +7797,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     replaceSessionParticipants: {
@@ -7951,15 +7879,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8150,15 +8069,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     replaceSessionRooms: {
@@ -8241,15 +8151,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8806,15 +8707,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     getUniversityDiscipline: {
@@ -8893,15 +8785,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8996,15 +8879,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     getUniversityEquipment: {
@@ -9083,15 +8957,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9188,15 +9053,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     getUniversityGroup: {
@@ -9275,15 +9131,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9381,15 +9228,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     getUniversityPerson: {
@@ -9468,15 +9306,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9576,15 +9405,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     getUniversityRoom: {
@@ -9663,15 +9483,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9768,15 +9579,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     getUniversitySupervision: {
@@ -9856,15 +9658,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9962,15 +9755,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     getUniversityTeaching: {
@@ -10056,15 +9840,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     listUniversityTimetable: {
@@ -10093,7 +9868,7 @@ export interface operations {
                     "application/json": components["schemas"]["PageResponseUniversityTimetableEntryResponse"];
                 };
             };
-            /** @description Invalid JSON, parameters or DTO fields */
+            /** @description Returns INVALID_TIMETABLE_RANGE when startsAt >= endsAt. Malformed date parameters return INVALID_REQUEST. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -10149,15 +9924,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10243,15 +10009,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
