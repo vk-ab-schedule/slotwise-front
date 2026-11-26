@@ -1,5 +1,5 @@
 import { Alert, Box, Button, Checkbox, FormControlLabel, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, TableRow, TextField, Typography } from '@mui/material'
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { errorMessage } from './repository'
 
 export function PageHeading({ title, subtitle }: { title: string; subtitle: string }) {
@@ -7,21 +7,23 @@ export function PageHeading({ title, subtitle }: { title: string; subtitle: stri
 }
 
 // The cancellation guard prevents a late response from replacing another route's data.
-export function useLoad<T>(load: () => Promise<T>) {
+export function useLoad<T>(load: () => Promise<T>, keepDataOnReload = false) {
   const [data, setData] = useState<T>()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [revision, setRevision] = useState(0)
+  const lastLoad = useRef(load)
   const reload = useCallback(() => setRevision(value => value + 1), [])
   useEffect(() => {
     let active = true
     setLoading(true)
     setError('')
-    setData(undefined)
+    if (!keepDataOnReload || load !== lastLoad.current) setData(undefined)
+    lastLoad.current = load
     void load().then(value => { if (active) setData(value) }, cause => { if (active) setError(errorMessage(cause)) }).finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [load, revision])
-  return { data, loading, error, reload }
+  }, [keepDataOnReload, load, revision])
+  return { data, setData, loading, error, reload }
 }
 
 export function ErrorNotice({ error, retry }: { error: string; retry?: () => void }) {

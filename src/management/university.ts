@@ -84,14 +84,20 @@ export async function deleteUniversityRecord<R extends UniversitySection>(sectio
   writeDatabase(db)
 }
 
+export const accountPasswordLength = { min: 8, max: 128 }
+
 export function passwordError(value: unknown): string {
-  return typeof value !== 'string' || !value.trim() || value.length > 128 ? 'Введите непустой пароль длиной до 128 символов.' : ''
+  const { min, max } = accountPasswordLength
+  if (typeof value !== 'string' || !value.trim()) return 'Введите непустой пароль.'
+  if (value.length < min || value.length > max) return `Введите пароль длиной от ${min} до ${max} символов.`
+  return ''
 }
 export async function accountAction(account: Schema['AccountResponse'], action: 'role' | 'enabled' | 'password', value: string | boolean): Promise<Schema['AccountResponse']> {
-  if (action === 'password' && passwordError(value)) throw new Error(passwordError(value))
+  const validationError = action === 'password' ? passwordError(value) : ''
+  if (validationError) throw new Error(validationError)
   if (!isMockMode()) {
     const response = await http.put<Schema['AccountResponse']>(`/admin/accounts/${account.id}/${action}`, { expectedVersion: account.version, [action]: value })
-    return action === 'password' ? account : response.data
+    return action === 'password' ? { ...account, hasPassword: true } : response.data
   }
   const db = readDatabase(), current = db.accounts.find(a => a.id === account.id)
   if (!current) throw new Error('Пользователь не найден.')
