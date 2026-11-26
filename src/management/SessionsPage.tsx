@@ -47,6 +47,7 @@ export function SessionDetailPage({ tab, children }: { tab: string; children?: (
     <Tabs value={tab} variant="scrollable" scrollButtons="auto" sx={{ mb: 3 }} aria-label="Разделы сессии">{[['parameters', 'Параметры', ''], ['resources', 'Участники и ресурсы', '/resources'], ['events', 'События', '/events'], ['rules', 'Правила', '/rules']].map(([key, label, path]) => <Tab key={key} value={key} label={label} component={Link} to={`/organizer/sessions/${id}${path}`} />)}</Tabs>
     <ErrorNotice error={state.error} retry={state.reload} />{state.loading && <CircularProgress aria-label="Загрузка сессии" />}
     {state.data && (children ? children(state.data, state.reload) : <SessionEditor key={`${state.data.id}-${state.data.version}`} session={state.data} onSaved={state.reload} />)}
+    {state.data && <Button component={Link} to={`/organizer/schedule/${state.data.id}`} sx={{ mt: 2 }}>Расписание и расчёт</Button>}
     <Paper sx={{ p: 2, mt: 3 }}><Typography color="text.secondary" variant="body2">Каждое изменение входных данных обновляет версию сессии. Существующие результаты расчёта могут устареть.</Typography></Paper>
   </Box>
 }

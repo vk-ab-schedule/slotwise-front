@@ -12,7 +12,7 @@ export function readDatabase(): Database {
 }
 export function writeDatabase(db: Database) { localStorage.setItem(managementStorageKey, JSON.stringify(db)) }
 
-// Demo has no saved solver variants; bumping input versions still exposes stale editors.
+// Input revisions also let schedule snapshots detect changes to university data.
 export function invalidateSessions(db: Database) {
   for (const session of db.sessions) { session.version++; session.inputVersion++ }
 }

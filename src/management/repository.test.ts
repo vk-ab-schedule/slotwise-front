@@ -205,11 +205,28 @@ describe('HTTP contract', () => {
     expect(body).not.toHaveProperty('version')
     expect(body).toHaveProperty('expectedVersion', 1)
   })
-  it('handles the password endpoint with no response body', async () => {
-    vi.spyOn(http, 'put').mockResolvedValue({ data: undefined, status: 204 })
-    expect(await accountAction(initialDatabase().accounts[0], 'password', 'test-password')).toHaveProperty('id', 1)
-    expect(await accountAction(initialDatabase().accounts[0], 'password', 'short')).toHaveProperty('id', 1)
-    await expect(accountAction(initialDatabase().accounts[0], 'password', ' ')).rejects.toThrow('непустой')
-    await expect(accountAction(initialDatabase().accounts[0], 'password', 'x'.repeat(129))).rejects.toThrow('128')
+  it('returns an updated account after a password response with no body', async () => {
+    const account = { ...initialDatabase().accounts[0], hasPassword: false }
+    const put = vi.spyOn(http, 'put').mockResolvedValue({ data: undefined, status: 204 })
+    const password = 'x'.repeat(8)
+    expect(await accountAction(account, 'password', password)).toEqual({ ...account, hasPassword: true })
+    expect(account.hasPassword).toBe(false)
+    expect(put).toHaveBeenCalledWith('/admin/accounts/1/password', { expectedVersion: account.version, password })
+  })
+  it('rejects invalid passwords before sending a request and accepts 128 characters', async () => {
+    const account = initialDatabase().accounts[0]
+    const put = vi.spyOn(http, 'put').mockResolvedValue({ data: undefined, status: 204 })
+    await expect(accountAction(account, 'password', 'x'.repeat(7))).rejects.toThrow('8')
+    await expect(accountAction(account, 'password', ' '.repeat(8))).rejects.toThrow('непустой')
+    await expect(accountAction(account, 'password', 'x'.repeat(129))).rejects.toThrow('128')
+    expect(put).not.toHaveBeenCalled()
+    await expect(accountAction(account, 'password', 'x'.repeat(128))).resolves.toHaveProperty('hasPassword', true)
+  })
+  it('keeps the account unchanged if setting the password fails', async () => {
+    const account = { ...initialDatabase().accounts[0], hasPassword: false }
+    const error = new Error('Password update failed')
+    vi.spyOn(http, 'put').mockRejectedValue(error)
+    await expect(accountAction(account, 'password', 'test-password')).rejects.toBe(error)
+    expect(account.hasPassword).toBe(false)
   })
 })
