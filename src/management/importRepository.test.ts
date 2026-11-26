@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { importUniversity, parseImport } from './importRepository'
 import { managementStorageKey, readDatabase } from './repository'
-import { http } from '../api/http'
+import * as client from '../api/client'
 
 beforeEach(() => {
   const storage = new Map<string, string>()
@@ -79,9 +79,9 @@ describe('university JSON import', () => {
   })
   it('sends the immutable preview input as JSON with explicit flags', async () => {
     vi.stubEnv('VITE_MOCK_API', 'false')
-    const post = vi.spyOn(http, 'post').mockResolvedValue({ data: {} })
+    const request = vi.spyOn(client, 'api').mockResolvedValue(undefined)
     const input = parseImport(JSON.stringify(document))
     await importUniversity(input, true)
-    expect(post).toHaveBeenCalledWith('/admin/import', input, { params: { dryRun: true, allowPartial: false } })
+    expect(request).toHaveBeenCalledWith('post', '/api/admin/import', { body: input, query: { dryRun: true, allowPartial: false } })
   })
 })

@@ -1,7 +1,9 @@
-import { http, isMockMode } from '../api/http'
+import { api } from '../api/client'
+import { isMockMode } from '../api/mode'
 import { assertVersion, readDatabase, writeDatabase } from './repository'
 import { ownedSession } from './sessions'
-import { personName, type Page, type Schema } from './types'
+import { loadPages } from '../api/page'
+import { personName, type Schema } from './types'
 
 export function uniqueEventParticipants(participants: Schema['EventParticipant'][]): Schema['EventParticipant'][] {
   const byAccount = new Map<number, Schema['EventParticipant']>()
@@ -16,13 +18,10 @@ export function uniqueEventParticipants(participants: Schema['EventParticipant']
 
 export async function listEvents(id: number): Promise<Schema['EventResponse'][]> {
   if (isMockMode()) { const db = readDatabase(); ownedSession(db, id); return structuredClone(db.events.filter(e => e.sessionId === id)) }
-  const rows: Schema['EventResponse'][] = []
-  let page = 0, total = 1
-  while (page < total) { const { data } = await http.get<Page<Schema['EventResponse']>>(`/sessions/${id}/events`, { params: { page, size: 100 } }); rows.push(...data.items); total = data.totalPages; page++ }
-  return rows
+  return loadPages(page => api('get', '/api/sessions/{id}/events', { path: { id }, query: { page, size: 100 } }))
 }
 export async function createEvents(id: number, input: Schema['CreateEventsRequest']): Promise<Schema['CreateEventsResponse']> {
-  if (!isMockMode()) return (await http.post<Schema['CreateEventsResponse']>(`/sessions/${id}/events`, input)).data
+  if (!isMockMode()) return api('post', '/api/sessions/{id}/events', { path: { id }, body: input })
   const db = readDatabase(), session = ownedSession(db, id), type = db['event-types'].find(t => t.id === input.eventTypeId && t.active)
   assertVersion(session.version, input.expectedVersion)
   if (!type) throw new Error('Выберите активный тип события.')
@@ -79,7 +78,7 @@ export function validateEvent(input: Schema['UpdateEventRequest'], event: Schema
 }
 export async function updateEvent(event: Schema['EventResponse'], input: Schema['UpdateEventRequest']): Promise<void> {
   input = { ...input, participants: uniqueEventParticipants(input.participants) }
-  if (!isMockMode()) { await http.put(`/sessions/${event.sessionId}/events/${event.id}`, input); return }
+  if (!isMockMode()) { await api('put', '/api/sessions/{id}/events/{eventId}', { path: { id: event.sessionId, eventId: event.id }, body: input }); return }
   const db = readDatabase(), session = ownedSession(db, event.sessionId), current = db.events.find(e => e.id === event.id)
   if (!current) throw new Error('Событие не найдено.')
   assertVersion(current.version, input.expectedVersion)

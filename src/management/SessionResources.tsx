@@ -3,13 +3,13 @@ import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { allRecords, errorMessage } from './repository'
 import { ErrorNotice, FormFields, useLoad } from './components'
-import { acceptSelectionSave, getSelections, publicPeople, saveSelection, type Selection, type SelectionKind } from './sessions'
-import { peopleOptions } from './university'
+import { acceptSelectionSave, getSelections, saveSelection, type Selection, type SelectionKind } from './sessions'
+import { peopleOptions, publicPeople } from './university'
 import type { Schema } from './types'
 
 export function SessionResources({ session }: { session: Schema['PlanningSessionResponse'] }) {
   const load = useCallback(async () => {
-    const [selection, people, groups, rooms] = await Promise.all([getSelections(session.id), publicPeople(), allRecords('groups'), allRecords('rooms')])
+    const [selection, people, groups, rooms] = await Promise.all([getSelections(session.id), publicPeople(true), allRecords('groups'), allRecords('rooms')])
     return { selection, people, groups, rooms }
   }, [session.id])
   const state = useLoad(load)

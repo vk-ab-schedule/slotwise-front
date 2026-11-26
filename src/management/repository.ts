@@ -1,5 +1,5 @@
-import axios from 'axios'
-import { http, isMockMode } from '../api/http'
+import { isMockMode } from '../api/mode'
+import { readRecords, writeRecord } from './remoteRecords'
 import { authStore } from '../auth/authStore'
 import { defaultRules, initialDatabase } from './demo'
 import { recordKey, type Database, type Page, type Resource, type ResourceMap, type Schema, type WriteMap } from './types'
@@ -17,18 +17,8 @@ export function invalidateSessions(db: Database) {
   for (const session of db.sessions) { session.version++; session.inputVersion++ }
 }
 
-export function errorMessage(error: unknown): string {
-  if (axios.isAxiosError<Schema['ApiProblem']>(error)) {
-    if (error.response?.status === 409 && /STALE|VERSION|REVISION/i.test(error.response.data?.code ?? '')) return 'Данные изменились. Обновите страницу и повторите изменения.'
-    if (error.response?.status === 501) return 'Эта операция ещё не реализована на сервере. Попробуйте позже.'
-    const problem = error.response?.data
-    return [problem?.detail, ...(problem?.fieldErrors?.map(e => `${e.field}: ${e.message}`) ?? []), ...(problem?.issues?.map(i => i.message) ?? [])].filter(Boolean).join('\n') || 'Не удалось выполнить запрос. Проверьте соединение и повторите.'
-  }
-  return error instanceof Error ? error.message : 'Не удалось выполнить действие.'
-}
+export { errorMessage } from '../api/errors'
 
-const readPath = (r: Resource) => r === 'accounts' ? '/admin/accounts' : r === 'sessions' || r === 'event-types' ? `/${r}` : `/university/${r}`
-const writePath = (r: Resource) => r === 'sessions' || r === 'event-types' ? `/${r}` : `/admin/${r}`
 const writeFields: { [R in Resource]: readonly (keyof WriteMap[R])[] } = {
   accounts: ['email', 'externalId', 'firstName', 'lastName', 'patronymic', 'role', 'timeZone'],
   groups: ['name', 'externalId', 'studentIds', 'active'], rooms: ['name', 'externalId', 'building', 'capacity', 'online', 'equipmentIds', 'active'],
@@ -45,7 +35,7 @@ function visible<R extends Resource>(resource: R, db: Database): ResourceMap[R][
   return (resource === 'sessions' ? (rows as Database['sessions']).filter(r => r.organizerId === authStore.user?.id) : rows) as ResourceMap[R][]
 }
 export async function listRecords<R extends Resource>(resource: R, page = 0, search = ''): Promise<Page<ResourceMap[R]>> {
-  if (!isMockMode()) return (await http.get<Page<ResourceMap[R]>>(readPath(resource), { params: { page, size: 20, ...(resource === 'sessions' ? {} : { search }) } })).data
+  if (!isMockMode()) return readRecords[resource]({ page, size: 20, search: search || undefined })
   const terms = search.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
   const rows = visible(resource, readDatabase()).filter(r => terms.every(term => JSON.stringify(r).toLocaleLowerCase().includes(term)))
   return { items: structuredClone(rows.slice(page * 20, (page + 1) * 20)), page, size: 20, totalElements: rows.length, totalPages: Math.ceil(rows.length / 20) }
@@ -60,11 +50,7 @@ export async function saveRecord<R extends Resource>(resource: R, input: WriteMa
   // Response objects are convenient form defaults, but read-only fields must never be sent back.
   input = Object.fromEntries(writeFields[resource].filter(key => key in input && !(key === 'role' && existing) && !(key === 'active' && !existing && resource !== 'event-types')).map(key => [key, input[key]])) as unknown as WriteMap[R]
   const version = existing && 'version' in existing ? existing.version : undefined
-  const body = version !== undefined ? { ...input, expectedVersion: version } : input
-  if (!isMockMode()) {
-    const path = `${writePath(resource)}${existing ? `/${recordKey(existing)}` : ''}`
-    return (await http.request<ResourceMap[R]>({ url: path, method: !existing ? 'POST' : resource === 'accounts' || resource === 'sessions' ? 'PATCH' : 'PUT', data: body })).data
-  }
+  if (!isMockMode()) return writeRecord[resource](input, existing)
   const db = readDatabase()
   const rows = db[resource] as ResourceMap[R][]
   const current = existing && rows.find(r => recordKey(r) === recordKey(existing))

@@ -1,6 +1,7 @@
 import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField } from '@mui/material'
 import { useCallback, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { hasStatus } from '../api/errors'
 import { DataTable, ErrorNotice, FormFields, PageHeading, useLoad, validateFields, type FormValues } from './components'
 import { errorMessage, listRecords, saveRecord } from './repository'
 import { accountAction, accountPasswordLength, deleteUniversityRecord, loadCatalogs, passwordError, universityDefaults, universityFields, universityPayload, universitySections, validateUniversity, type Catalogs, type UniversitySection } from './university'
@@ -11,9 +12,17 @@ export function UniversityPage({ users = false }: { users?: boolean }) {
   const section = params.get('section') as UniversitySection | null
   const selected = users ? 'accounts' : section && section in universitySections ? section : null
   const load = useCallback(async () => {
-    const entries = await Promise.all(Object.keys(universitySections).map(async resource => [resource, (await listRecords(resource as UniversitySection)).totalElements] as const))
+    if (selected) return null
+    const entries = await Promise.all(Object.keys(universitySections).map(async resource => {
+      try {
+        return [resource, (await listRecords(resource as UniversitySection)).totalElements] as const
+      } catch (error) {
+        if (!hasStatus(error, 501)) throw error
+        return [resource, null] as const
+      }
+    }))
     return Object.fromEntries(entries)
-  }, [])
+  }, [selected])
   const overview = useLoad(load)
   return <Box><PageHeading title={users ? 'Пользователи' : 'Данные вуза'} subtitle={users ? 'Поиск, роли и доступ к SlotWise' : 'Импорт и ручное редактирование · синтетический набор данных'} />
     {!users && <Stack direction="row" flexWrap="wrap" gap={1.5} sx={{ mb: 2.5 }}><Button variant="contained" component={Link} to="/admin/university/import">Загрузить JSON</Button>{selected && <Button variant="outlined" onClick={() => setParams({})}>Все разделы</Button>}</Stack>}

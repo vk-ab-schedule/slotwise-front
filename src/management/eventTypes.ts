@@ -1,4 +1,5 @@
-import { http, isMockMode } from '../api/http'
+import { isMockMode } from '../api/mode'
+import { deleteRecord } from './remoteRecords'
 import { assertVersion, readDatabase, writeDatabase } from './repository'
 import type { Schema } from './types'
 
@@ -34,7 +35,7 @@ export function validateEventType(input: Schema['CreateEventTypeRequest'], types
 }
 
 export async function deleteEventType(type: Schema['EventTypeResponse']) {
-  if (!isMockMode()) { await http.delete(`/event-types/${type.id}`, { params: { expectedVersion: type.version } }); return }
+  if (!isMockMode()) return deleteRecord['event-types'](type)
   const db = readDatabase(), current = db['event-types'].find(t => t.id === type.id)
   if (!current) throw new Error('Тип уже удалён.')
   assertVersion(current.version, type.version)

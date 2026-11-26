@@ -1,4 +1,5 @@
-import { http, isMockMode } from '../api/http'
+import { api } from '../api/client'
+import { isMockMode } from '../api/mode'
 import { localDate, localTime, zonedDateTimeToIso } from '../availability/time'
 import { authStore } from '../auth/authStore'
 import { assertVersion, readDatabase, writeDatabase } from './repository'
@@ -78,19 +79,10 @@ export function ownedSession(db: Database, id: number) {
   return session
 }
 export async function getSession(id: number): Promise<Schema['PlanningSessionResponse']> {
-  return isMockMode() ? structuredClone(ownedSession(readDatabase(), id)) : (await http.get<Schema['PlanningSessionResponse']>(`/sessions/${id}`)).data
+  return isMockMode() ? structuredClone(ownedSession(readDatabase(), id)) : api('get', '/api/sessions/{id}', { path: { id } })
 }
-export async function publicPeople(): Promise<Schema['PersonSummary'][]> {
-  if (isMockMode()) return readDatabase().accounts.filter(p => p.enabled)
-  const result: Schema['PersonSummary'][] = []
-  let page = 0, total = 1
-  while (page < total) { const { data } = await http.get<{ items: Schema['PersonSummary'][]; totalPages: number }>('/university/people', { params: { page, size: 100, enabled: true } }); result.push(...data.items); total = data.totalPages; page++ }
-  return result
-}
-
 export type SelectionKind = 'participants' | 'rooms' | 'commission'
 export type Selection = Database['selections'][number]
-export const selectionPath = (kind: SelectionKind) => kind === 'commission' ? 'commission-pool' : kind
 export async function getSelections(id: number): Promise<Selection> {
   if (isMockMode()) {
     const db = readDatabase()
@@ -103,9 +95,11 @@ export async function getSelections(id: number): Promise<Selection> {
     return selection
   }
   const [participants, rooms, commission] = await Promise.all([
-    http.get<Selection['participants']>(`/sessions/${id}/participants`), http.get<Selection['rooms']>(`/sessions/${id}/rooms`), http.get<Selection['commission']>(`/sessions/${id}/commission-pool`),
+    api('get', '/api/sessions/{id}/participants', { path: { id } }),
+    api('get', '/api/sessions/{id}/rooms', { path: { id } }),
+    api('get', '/api/sessions/{id}/commission-pool', { path: { id } }),
   ])
-  return { participants: participants.data, rooms: rooms.data, commission: commission.data }
+  return { participants, rooms, commission }
 }
 export function acceptSelectionSave<K extends SelectionKind>(selection: Selection, kind: K, saved: Selection[K], expectedVersion: number): Selection {
   const next = { ...selection, [kind]: saved }
@@ -117,11 +111,21 @@ export function acceptSelectionSave<K extends SelectionKind>(selection: Selectio
   }
   return next
 }
+const saveRemoteSelection: { [K in SelectionKind]: (id: number, value: Selection[K]) => Promise<Selection[K]> } = {
+  participants: (id, { studyGroupIds, accountIds, sessionVersion }) => api('put', '/api/sessions/{id}/participants', {
+    path: { id }, body: { studyGroupIds, accountIds, expectedVersion: sessionVersion },
+  }),
+  rooms: (id, { roomIds, sessionVersion }) => api('put', '/api/sessions/{id}/rooms', {
+    path: { id }, body: { roomIds, expectedVersion: sessionVersion },
+  }),
+  commission: (id, { candidates, sessionVersion }) => api('put', '/api/sessions/{id}/commission-pool', {
+    path: { id }, body: { candidates, expectedVersion: sessionVersion },
+  }),
+}
+
 export async function saveSelection<K extends SelectionKind>(id: number, kind: K, value: Selection[K]): Promise<Selection[K]> {
   const expectedVersion = value.sessionVersion
-  const body = kind === 'participants' ? { studyGroupIds: (value as Selection['participants']).studyGroupIds, accountIds: (value as Selection['participants']).accountIds, expectedVersion }
-    : kind === 'rooms' ? { roomIds: (value as Selection['rooms']).roomIds, expectedVersion } : { candidates: (value as Selection['commission']).candidates, expectedVersion }
-  if (!isMockMode()) return (await http.put<Selection[K]>(`/sessions/${id}/${selectionPath(kind)}`, body)).data
+  if (!isMockMode()) return saveRemoteSelection[kind](id, value)
   const db = readDatabase(), session = ownedSession(db, id)
   assertVersion(session.version, expectedVersion)
   if (kind === 'participants') {

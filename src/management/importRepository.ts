@@ -1,4 +1,5 @@
-import { http, isMockMode } from '../api/http'
+import { api } from '../api/client'
+import { isMockMode } from '../api/mode'
 import { invalidateSessions, readDatabase, writeDatabase } from './repository'
 import { timeZoneValid } from './university'
 import type { Database, Schema } from './types'
@@ -22,7 +23,7 @@ export function parseImport(text: string): Import {
 }
 
 export async function importUniversity(input: Import, dryRun: boolean, allowPartial = false): Promise<Schema['UniversityImportResponse']> {
-  if (!isMockMode()) return (await http.post<Schema['UniversityImportResponse']>('/admin/import', input, { params: { dryRun, allowPartial } })).data
+  if (!isMockMode()) return api('post', '/api/admin/import', { body: input, query: { dryRun, allowPartial } })
   const db = readDatabase()
   const diagnostics: Schema['UniversityImportDiagnostic'][] = []
   const counts = () => ({ total: 0, created: 0, updated: 0, unchanged: 0, rejected: 0 })

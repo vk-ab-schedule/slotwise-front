@@ -26,7 +26,7 @@ export type WriteMap = {
   'event-types': Schema['CreateEventTypeRequest']
   sessions: Schema['CreatePlanningSessionRequest']
 }
-export type Page<T> = { items: T[]; page: number; size: number; totalElements: number; totalPages: number }
+export type { Page } from '../api/page'
 export type Database = { [R in Resource]: ResourceMap[R][] } & {
   rules: Record<number, Schema['SessionRulesResponse']>
   events: Schema['EventResponse'][]

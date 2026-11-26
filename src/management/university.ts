@@ -1,5 +1,8 @@
 import { allRecords, assertVersion, invalidateSessions, readDatabase, writeDatabase } from './repository'
-import { http, isMockMode } from '../api/http'
+import { api } from '../api/client'
+import { isMockMode } from '../api/mode'
+import { loadPages } from '../api/page'
+import { deleteRecord, updateAccountAccess } from './remoteRecords'
 import { personName, recordKey, roleLabels, type ResourceMap, type Schema } from './types'
 import type { Field, FormValues, Option } from './components'
 import { localDate, localTime, zonedDateTimeToIso } from '../availability/time'
@@ -7,8 +10,12 @@ import { authStore } from '../auth/authStore'
 
 export const universitySections = { accounts: 'Учётные записи', groups: 'Учебные группы', rooms: 'Аудитории', disciplines: 'Дисциплины', equipment: 'Оборудование', teachings: 'Преподаватели дисциплин', supervisions: 'Научные руководители', timetable: 'Учебное расписание' }
 export type UniversitySection = keyof typeof universitySections
+export function publicPeople(enabled?: boolean): Promise<Schema['PersonSummary'][]> {
+  if (isMockMode()) return Promise.resolve(readDatabase().accounts.filter(p => enabled === undefined || p.enabled === enabled))
+  return loadPages(page => api('get', '/api/university/people', { query: { page, size: 100, enabled } }))
+}
 export const loadCatalogs = async () => {
-  const [accounts, groups, rooms, disciplines, equipment] = await Promise.all([allRecords('accounts'), allRecords('groups'), allRecords('rooms'), allRecords('disciplines'), allRecords('equipment')])
+  const [accounts, groups, rooms, disciplines, equipment] = await Promise.all([publicPeople(), allRecords('groups'), allRecords('rooms'), allRecords('disciplines'), allRecords('equipment')])
   return { accounts, groups, rooms, disciplines, equipment }
 }
 export type Catalogs = Awaited<ReturnType<typeof loadCatalogs>>
@@ -65,8 +72,8 @@ export function validateUniversity(section: UniversitySection, values: FormValue
 export async function deleteUniversityRecord<R extends UniversitySection>(section: R, row: ResourceMap[R]) {
   if (section === 'accounts') throw new Error('Учётную запись можно отключить в настройках доступа.')
   if (!isMockMode()) {
-    await http.delete(`/admin/${section}/${recordKey(row)}`, { params: 'version' in row ? { expectedVersion: row.version } : undefined })
-    return
+    const remove = deleteRecord[section as Exclude<UniversitySection, 'accounts'>] as (record: ResourceMap[R]) => Promise<void>
+    return remove(row)
   }
   const db = readDatabase()
   const id = 'id' in row ? Number(row.id) : 0
@@ -95,10 +102,7 @@ export function passwordError(value: unknown): string {
 export async function accountAction(account: Schema['AccountResponse'], action: 'role' | 'enabled' | 'password', value: string | boolean): Promise<Schema['AccountResponse']> {
   const validationError = action === 'password' ? passwordError(value) : ''
   if (validationError) throw new Error(validationError)
-  if (!isMockMode()) {
-    const response = await http.put<Schema['AccountResponse']>(`/admin/accounts/${account.id}/${action}`, { expectedVersion: account.version, [action]: value })
-    return action === 'password' ? { ...account, hasPassword: true } : response.data
-  }
+  if (!isMockMode()) return updateAccountAccess(account, action, value)
   const db = readDatabase(), current = db.accounts.find(a => a.id === account.id)
   if (!current) throw new Error('Пользователь не найден.')
   assertVersion(current.version, account.version)
