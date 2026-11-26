@@ -56,6 +56,7 @@ export function CalculationPanel({ session, rules, solvers, initialJob, onResult
   const validLimit = limit.trim() !== '' && Number.isInteger(limitNumber) && limitNumber >= 1 && limitNumber <= 300
   const validSeed = seed.trim() !== '' && Number.isSafeInteger(seedNumber)
   const busy = pending !== null || activeId !== null
+  const checkedInputVersion = check && !check.issues.some(issue => issue.code === 'NO_EVENTS') ? check.inputVersion : null
 
   async function runCheck() {
     setPending('check')
@@ -71,12 +72,12 @@ export function CalculationPanel({ session, rules, solvers, initialJob, onResult
   }
 
   async function launch() {
-    if (busy || !algorithm || !validLimit || !validSeed || !check) return
+    if (busy || !algorithm || !validLimit || !validSeed || checkedInputVersion === null) return
     setPending('start')
     setActionError('')
     try {
       const next = await scheduleDemo.startJob(session.id, {
-        algorithm, timeLimitSeconds: limitNumber, seed: seedNumber, expectedInputVersion: check.inputVersion,
+        algorithm, timeLimitSeconds: limitNumber, seed: seedNumber, expectedInputVersion: checkedInputVersion,
       })
       setJob(next)
       setPollError('')
@@ -113,7 +114,7 @@ export function CalculationPanel({ session, rules, solvers, initialJob, onResult
           </Alert>}
           <Stack direction="row" gap={1} flexWrap="wrap">
             <Button variant="outlined" disabled={busy} onClick={() => void runCheck()}>{pending === 'check' ? 'Проверяем…' : 'Проверить данные'}</Button>
-            <Button type="submit" variant="contained" disabled={busy || !check || !algorithm || !validLimit || !validSeed || check.issues.some(issue => issue.code === 'NO_EVENTS')}>
+            <Button type="submit" variant="contained" disabled={busy || checkedInputVersion === null || !algorithm || !validLimit || !validSeed}>
               {pending === 'start' ? 'Запускаем…' : check && (check.issues.length || check.incompleteData) ? 'Запустить с предупреждениями' : 'Запустить расчёт'}
             </Button>
           </Stack>

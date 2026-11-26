@@ -10,6 +10,8 @@ import { algorithmLabels, isActiveJob, type Assignment, type Session, type Solve
 const storageKey = 'slotwise-demo-schedule-v1'
 const queueMillis = 1800
 const runMillis = 4200
+const minuteMillis = 60_000
+const noReadyEvents = 'Нет готовых событий для расчёта. Добавьте события или заполните их требования на вкладке «События».'
 const weekdays = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'] as const
 type DemoRun = { job: SolverJob; variant: Variant | null }
 
@@ -37,7 +39,7 @@ function currentJob({ job, variant }: DemoRun, now = Date.now()): SolverJob {
 
 function diagnostics(events: Schema['EventResponse'][]): Schema['ApiIssue'][] {
   return events.filter(event => !event.complete).map(event => ({
-    code: 'INCOMPLETE_EVENT', severity: 'WARNING', message: `«${event.title}»: требования к событию заполнены не полностью.`,
+    code: 'INCOMPLETE_EVENT', severity: 'WARNING', message: `«${event.title}» исключено из расчёта: требования заполнены не полностью.`,
     eventIds: [event.id], accountIds: [], roomIds: [],
   }))
 }
@@ -50,17 +52,20 @@ function sessionInputs(id: number) {
 
 function precheck(session: Session, events: Schema['EventResponse'][]): Schema['PrecheckResponse'] {
   const issues = diagnostics(events)
-  if (!events.length) issues.push({
-    code: 'NO_EVENTS', severity: 'WARNING', message: 'Добавьте события на вкладке «События».',
+  if (!events.some(event => event.complete)) issues.push({
+    code: 'NO_EVENTS', severity: 'WARNING', message: noReadyEvents,
     eventIds: [], accountIds: [], roomIds: [],
   })
   return { sessionId: session.id, inputVersion: session.inputVersion, incompleteData: session.collectionStatus !== 'CLOSED', nonRespondentIds: [], issues }
 }
 
-function demoAssignments(db: Database, session: Session, events: Schema['EventResponse'][], issues: Schema['ApiIssue'][]): Assignment[] {
-  const selection = db.selections[session.id]
+function demoAssignments(db: Database, session: Session, events: Schema['EventResponse'][]): Assignment[] {
+  const selectedRoomIds = db.selections[session.id]?.rooms.roomIds ?? []
   const people = new Map(db.accounts.map(person => [person.id, person]))
-  const selectedRooms = db.rooms.filter(room => room.active && (room.online || selection?.rooms.roomIds.includes(room.id)))
+  const selectedRooms = db.rooms.filter(room => room.active && selectedRoomIds.includes(room.id))
+  const sessionStart = Date.parse(session.startsAt)
+  const sessionEnd = Date.parse(session.endsAt)
+  const slotMillis = db.rules[session.id].slotMinutes * minuteMillis
   const firstDay = localDate(session.startsAt, session.timeZone)
   const lastDay = localDate(session.endsAt, session.timeZone)
   let day = firstDay
@@ -72,25 +77,29 @@ function demoAssignments(db: Database, session: Session, events: Schema['EventRe
     const room = selectedRooms.find(room => room.online === (event.format === 'ONLINE') &&
       (room.capacity === null || room.capacity >= participants.length + event.commissionSize) &&
       event.equipmentIds.every(id => room.equipmentIds.includes(id)))
-    const eventIssues = issues.filter(issue => issue.eventIds.includes(event.id))
     const assignment: Assignment = {
       eventId: event.id, eventTypeId: event.eventTypeId, title: event.title, format: event.format, durationMinutes: event.durationMinutes,
       participants, commissionMembers: [], status: 'UNASSIGNED', startsAt: null, endsAt: null, room: null,
-      locked: false, version: 1, issues: eventIssues,
+      locked: false, version: 1, issues: [],
     }
     // Sample slots exercise the calendar. Real constraint evaluation belongs to the solver.
-    if (event.complete && room && !event.commissionSize && !event.dependencies.length) {
+    if (room && !event.commissionSize && !event.dependencies.length) {
       while (day <= lastDay) {
         const slotDay = day
         day = addDays(day, 1)
         const weekday = weekdays[new Date(`${slotDay}T00:00:00Z`).getUTCDay()]
         if (!session.workingDays.includes(weekday)) continue
-        const startsAt = zonedDateTimeToIso(slotDay, session.workingDayStart, session.timeZone)
-        const endsAt = new Date(Date.parse(startsAt) + event.durationMinutes * 60_000).toISOString()
-        const closesAt = zonedDateTimeToIso(slotDay, session.workingDayEnd, session.timeZone)
-        if (Date.parse(startsAt) < Date.parse(session.startsAt)) continue
-        if (Date.parse(endsAt) > Math.min(Date.parse(closesAt), Date.parse(session.endsAt))) continue
-        return { ...assignment, status: 'ASSIGNED', startsAt, endsAt, room: { id: room.id, name: room.name, building: room.building, online: room.online } }
+        const midnight = Date.parse(zonedDateTimeToIso(slotDay, '00:00', session.timeZone))
+        const opensAt = Date.parse(zonedDateTimeToIso(slotDay, session.workingDayStart, session.timeZone))
+        const closesAt = Date.parse(zonedDateTimeToIso(slotDay, session.workingDayEnd, session.timeZone))
+        const windowStart = Math.max(opensAt, sessionStart)
+        const start = midnight + Math.ceil((windowStart - midnight) / slotMillis) * slotMillis
+        const end = start + event.durationMinutes * minuteMillis
+        if (end > Math.min(closesAt, sessionEnd)) continue
+        return {
+          ...assignment, status: 'ASSIGNED', startsAt: new Date(start).toISOString(), endsAt: new Date(end).toISOString(),
+          room: { id: room.id, name: room.name, building: room.building, online: room.online },
+        }
       }
     }
     return assignment
@@ -119,7 +128,8 @@ export const scheduleDemo = {
   async startJob(id: number, request: SolveRequest) {
     const { db, session, events } = sessionInputs(id)
     assertVersion(session.inputVersion, request.expectedInputVersion)
-    if (!events.length) throw new Error('Добавьте события перед запуском расчёта.')
+    const readyEvents = events.filter(event => event.complete)
+    if (!readyEvents.length) throw new Error(noReadyEvents)
     if (request.algorithm === 'TIMEFOLD') throw new Error('Алгоритм Timefold недоступен.')
     if (!Number.isInteger(request.timeLimitSeconds) || request.timeLimitSeconds < 1 || request.timeLimitSeconds > 300 || !Number.isSafeInteger(request.seed)) {
       throw new Error('Укажите целый лимит от 1 до 300 секунд и целый seed.')
@@ -137,7 +147,7 @@ export const scheduleDemo = {
       solveStatus: null, createdAt, startedAt: null, finishedAt: null, version: 1,
     }
     const check = precheck(session, events)
-    const assignments = demoAssignments(db, session, events, check.issues)
+    const assignments = demoAssignments(db, session, readyEvents)
     const variant: Variant | null = request.timeLimitSeconds === 1 ? null : {
       id: jobId, sessionId: id, solverJobId: jobId, inputSnapshotId: jobId, inputVersion: session.inputVersion, currentInputVersion: session.inputVersion,
       version: 1, baseVariantId: null, createdAt: new Date(now + queueMillis + Math.min(runMillis, request.timeLimitSeconds * 1000)).toISOString(),
