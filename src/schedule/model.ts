@@ -5,9 +5,7 @@ export type Assignment = Schema['AssignmentResponse']
 export type ScheduleEvent = Schema['PersonalScheduleEventResponse']
 export type Session = Schema['PlanningSessionResponse']
 export type SolveRequest = Schema['SolveRequest']
-export type SolverJob = Schema['SolverJobResponse'] & {
-  quality: { unassignedEvents: number; penalty: number; bestBound: number | null } | null
-}
+export type SolverJob = Schema['SolverJobResponse']
 
 export const algorithmLabels = { GREEDY: 'Greedy', CP_SAT: 'CP-SAT', TIMEFOLD: 'Timefold' }
 export const formatLabels = { ONSITE: 'Очно', ONLINE: 'Онлайн', HYBRID: 'Гибрид' }

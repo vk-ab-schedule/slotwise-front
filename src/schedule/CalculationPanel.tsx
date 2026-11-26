@@ -1,10 +1,11 @@
 import { Accordion, AccordionDetails, AccordionSummary, Alert, Button, LinearProgress, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material'
 import ExpandMore from '@mui/icons-material/ExpandMore'
 import { useEffect, useState } from 'react'
+import { isMockMode } from '../api/mode'
 import { ErrorNotice } from '../management/components'
 import { errorMessage } from '../management/repository'
 import type { Schema } from '../management/types'
-import { scheduleDemo } from './demoRepository'
+import { scheduleRepository } from './repository'
 import { algorithmLabels, isActiveJob, qualityLabels, type Session, type SolverJob } from './model'
 import { pollJob } from './pollJob'
 
@@ -42,7 +43,7 @@ export function CalculationPanel({ session, rules, solvers, initialJob, onResult
   useEffect(() => {
     if (activeId === null || pollError) return
     return pollJob(
-      () => scheduleDemo.getJob(activeId),
+      () => scheduleRepository.getJob(activeId),
       next => {
         setJob(next)
         if (next.resultId !== null && next.status === 'COMPLETED') onResult(next.resultId)
@@ -63,7 +64,7 @@ export function CalculationPanel({ session, rules, solvers, initialJob, onResult
     setActionError('')
     setCheck(null)
     try {
-      setCheck(await scheduleDemo.precheck(session.id, session.inputVersion))
+      setCheck(await scheduleRepository.precheck(session.id, session.inputVersion))
     } catch (error) {
       setActionError(errorMessage(error))
     } finally {
@@ -76,7 +77,7 @@ export function CalculationPanel({ session, rules, solvers, initialJob, onResult
     setPending('start')
     setActionError('')
     try {
-      const next = await scheduleDemo.startJob(session.id, {
+      const next = await scheduleRepository.startJob(session.id, {
         algorithm, timeLimitSeconds: limitNumber, seed: seedNumber, expectedInputVersion: checkedInputVersion,
       })
       setJob(next)
@@ -98,7 +99,7 @@ export function CalculationPanel({ session, rules, solvers, initialJob, onResult
       </AccordionSummary>
       <AccordionDetails>
         <Stack gap={2} component="form" onSubmit={event => { event.preventDefault(); void launch() }}>
-          <Typography variant="body2" color="text.secondary">Демо-расчёт имитирует очередь, прогресс и создание черновика. Правила и список событий берутся из текущей сессии.</Typography>
+          {isMockMode() && <Typography variant="body2" color="text.secondary">Демо-расчёт имитирует очередь, прогресс и создание черновика. Правила и список событий берутся из текущей сессии.</Typography>}
           <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}>
             <TextField select label="Алгоритм" value={algorithm} onChange={event => setAlgorithm(event.target.value as typeof algorithm)} disabled={busy} sx={{ minWidth: 140 }}>
               {solvers.map(solver => <MenuItem key={solver.algorithm} value={solver.algorithm} disabled={!solver.available}>{solver.name}</MenuItem>)}

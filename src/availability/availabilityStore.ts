@@ -1,12 +1,7 @@
 import { makeAutoObservable, runInAction } from 'mobx'
-import { AxiosError } from 'axios'
+import { errorMessage } from '../api/errors'
 import { getCalendar, replaceCalendar, submitCalendar } from './repository'
 import type { BusyCalendar, IntervalInput } from './types'
-
-function errorMessage(error: unknown) {
-  if (error instanceof AxiosError) return (error.response?.data as { detail?: string })?.detail ?? 'Не удалось сохранить занятость.'
-  return error instanceof Error ? error.message : 'Не удалось выполнить запрос.'
-}
 
 export class AvailabilityStore {
   calendar: BusyCalendar | null = null
@@ -15,12 +10,12 @@ export class AvailabilityStore {
   error = ''
   success = ''
 
-  constructor() { makeAutoObservable(this) }
+  constructor(readonly sessionId: number) { makeAutoObservable(this) }
 
   async load() {
     this.loading = true
     this.error = ''
-    try { const calendar = await getCalendar(); runInAction(() => { this.calendar = calendar }) }
+    try { const calendar = await getCalendar(this.sessionId); runInAction(() => { this.calendar = calendar }) }
     catch (error) { runInAction(() => { this.error = errorMessage(error) }) }
     finally { runInAction(() => { this.loading = false }) }
   }
@@ -31,7 +26,7 @@ export class AvailabilityStore {
     this.error = ''
     this.success = ''
     try {
-      const calendar = await replaceCalendar(this.calendar.revision, intervals)
+      const calendar = await replaceCalendar(this.sessionId, this.calendar.revision, intervals)
       runInAction(() => { this.calendar = calendar; this.success = 'Интервалы сохранены.' })
       return true
     } catch (error) { runInAction(() => { this.error = errorMessage(error) }); return false }
@@ -43,7 +38,7 @@ export class AvailabilityStore {
     this.saving = true
     this.error = ''
     try {
-      const calendar = await submitCalendar(this.calendar.revision)
+      const calendar = await submitCalendar(this.sessionId, this.calendar.revision)
       runInAction(() => { this.calendar = calendar; this.success = 'Занятость отправлена.' })
       return true
     } catch (error) { runInAction(() => { this.error = errorMessage(error) }); return false }
@@ -52,5 +47,3 @@ export class AvailabilityStore {
 
   clearMessages() { this.error = ''; this.success = '' }
 }
-
-export const availabilityStore = new AvailabilityStore()

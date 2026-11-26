@@ -15,21 +15,21 @@ import { NewSessionPage, SessionDetailPage, SessionsPage } from './management/Se
 import { SessionResources } from './management/SessionResources'
 import { SessionEvents } from './management/SessionEvents'
 import { SessionRules } from './management/SessionRules'
-import { isMockMode } from './api/http'
+import { isMockMode } from './api/mode'
 import { OrganizerSchedulePage } from './schedule/OrganizerSchedulePage'
 import { PersonalSchedulePage } from './schedule/PersonalSchedulePage'
 
-function Home() {
+const Home = observer(function Home() {
   const role = authStore.user?.role
   return <Navigate to={role === 'ADMIN' ? '/admin/university' : role === 'ORGANIZER' ? '/organizer/sessions' : '/availability'} replace />
-}
+})
 
-function Protected({ children }: { children: React.ReactNode }) {
+const Protected = observer(function Protected({ children }: { children: React.ReactNode }) {
   return authStore.isAuthenticated ? children : <Navigate to="/login" replace />
-}
+})
 
-function DemoSchedule({ children }: { children: React.ReactNode }) {
-  return isMockMode() ? children : <Alert severity="info">Расписание пока доступно в демо-режиме.</Alert>
+function DemoScreen({ children }: { children: React.ReactNode }) {
+  return isMockMode() ? children : <Alert severity="info">Этот экран доступен в демо-режиме.</Alert>
 }
 
 export const App = observer(function App() {
@@ -40,24 +40,24 @@ export const App = observer(function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<Protected><Home /></Protected>} />
       <Route path="/availability" element={<Protected><AvailabilityPage /></Protected>} />
-      <Route path="/schedule" element={<Protected><DemoSchedule><PersonalSchedulePage /></DemoSchedule></Protected>} />
-      <Route path="/requests" element={<Protected><MockupPage screenId="3:559" /></Protected>} />
+      <Route path="/schedule" element={<Protected><PersonalSchedulePage /></Protected>} />
+      <Route path="/requests" element={<Protected><DemoScreen><MockupPage screenId="3:559" /></DemoScreen></Protected>} />
       <Route path="/organizer/sessions" element={<Protected><RoleGate role="ORGANIZER"><SessionsPage /></RoleGate></Protected>} />
       <Route path="/organizer/sessions/new" element={<Protected><RoleGate role="ORGANIZER"><NewSessionPage /></RoleGate></Protected>} />
       <Route path="/organizer/sessions/:id" element={<Protected><RoleGate role="ORGANIZER"><SessionDetailPage tab="parameters" /></RoleGate></Protected>} />
       <Route path="/organizer/sessions/:id/resources" element={<Protected><RoleGate role="ORGANIZER"><SessionDetailPage tab="resources">{session => <SessionResources session={session} />}</SessionDetailPage></RoleGate></Protected>} />
       <Route path="/organizer/sessions/:id/events" element={<Protected><RoleGate role="ORGANIZER"><SessionDetailPage tab="events">{session => <SessionEvents session={session} />}</SessionDetailPage></RoleGate></Protected>} />
       <Route path="/organizer/sessions/:id/rules" element={<Protected><RoleGate role="ORGANIZER"><SessionDetailPage tab="rules">{session => <SessionRules session={session} />}</SessionDetailPage></RoleGate></Protected>} />
-      <Route path="/organizer/schedule/:id?" element={<Protected><RoleGate role="ORGANIZER"><DemoSchedule><OrganizerSchedulePage /></DemoSchedule></RoleGate></Protected>} />
-      <Route path="/organizer/requests" element={<Protected><MockupPage screenId="4:1107" /></Protected>} />
-      <Route path="/organizer/scenarios" element={<Protected><MockupPage screenId="4:1288" /></Protected>} />
+      <Route path="/organizer/schedule/:id?" element={<Protected><RoleGate role="ORGANIZER"><OrganizerSchedulePage /></RoleGate></Protected>} />
+      <Route path="/organizer/requests" element={<Protected><DemoScreen><MockupPage screenId="4:1107" /></DemoScreen></Protected>} />
+      <Route path="/organizer/scenarios" element={<Protected><DemoScreen><MockupPage screenId="4:1288" /></DemoScreen></Protected>} />
       <Route path="/admin/university" element={<Protected><RoleGate role="ADMIN"><UniversityPage /></RoleGate></Protected>} />
       <Route path="/admin/university/import" element={<Protected><RoleGate role="ADMIN"><ImportPage /></RoleGate></Protected>} />
       <Route path="/admin/users" element={<Protected><RoleGate role="ADMIN"><UniversityPage users /></RoleGate></Protected>} />
       <Route path="/admin/event-types" element={<Protected><RoleGate role="ADMIN"><EventTypesPage /></RoleGate></Protected>} />
-      <Route path="/admin/experiments" element={<Protected><MockupPage screenId="5:544" /></Protected>} />
-      <Route path="/screens" element={<Protected><ScreenIndex /></Protected>} />
-      <Route path="/screens/:id" element={<Protected><MockupPage /></Protected>} />
+      <Route path="/admin/experiments" element={<Protected><DemoScreen><MockupPage screenId="5:544" /></DemoScreen></Protected>} />
+      <Route path="/screens" element={<Protected><DemoScreen><ScreenIndex /></DemoScreen></Protected>} />
+      <Route path="/screens/:id" element={<Protected><DemoScreen><MockupPage /></DemoScreen></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Route>
   </Routes>

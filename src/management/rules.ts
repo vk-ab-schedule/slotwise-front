@@ -1,4 +1,5 @@
-import { http, isMockMode } from '../api/http'
+import { api } from '../api/client'
+import { isMockMode } from '../api/mode'
 import { assertVersion, readDatabase, writeDatabase } from './repository'
 import { ownedSession } from './sessions'
 import type { Schema } from './types'
@@ -15,7 +16,7 @@ export function validateRules(value: Schema['SessionRulesResponse']): Record<str
   return errors
 }
 export async function getRules(id: number): Promise<Schema['SessionRulesResponse']> {
-  if (!isMockMode()) return (await http.get<Schema['SessionRulesResponse']>(`/sessions/${id}/rules`)).data
+  if (!isMockMode()) return api('get', '/api/sessions/{id}/rules', { path: { id } })
   const db = readDatabase(), session = ownedSession(db, id)
   return { ...structuredClone(db.rules[id]), sessionVersion: session.version, inputVersion: session.inputVersion }
 }
@@ -23,7 +24,7 @@ export async function saveRules(id: number, value: Schema['SessionRulesResponse'
   const errors = validateRules(value)
   if (Object.keys(errors).length) throw new Error(Object.values(errors).join('\n'))
   const body: Schema['UpdateRequest'] = { expectedVersion: value.sessionVersion, weights: value.weights, roomChangeBufferMinutes: value.roomChangeBufferMinutes, defaultAlgorithm: value.defaultAlgorithm, timeLimitSeconds: value.timeLimitSeconds, seed: value.seed }
-  if (!isMockMode()) return (await http.put<Schema['SessionRulesResponse']>(`/sessions/${id}/rules`, body)).data
+  if (!isMockMode()) return api('put', '/api/sessions/{id}/rules', { path: { id }, body })
   const db = readDatabase(), session = ownedSession(db, id)
   assertVersion(session.version, value.sessionVersion)
   session.version++; session.inputVersion++

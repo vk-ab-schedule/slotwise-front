@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { authStore } from '../auth/authStore'
-import { http } from '../api/http'
+import * as client from '../api/client'
 import { allRecords, listRecords, managementStorageKey, readDatabase, saveRecord } from './repository'
 import { initialDatabase, defaultRules } from './demo'
 import { accountAction, deleteUniversityRecord } from './university'
@@ -167,23 +167,38 @@ describe('HTTP contract', () => {
   beforeEach(() => vi.stubEnv('VITE_MOCK_API', 'false'))
   it('sends the version of the edited resource without substituting another version', async () => {
     const rooms = initialDatabase().selections[1].rooms
-    const put = vi.spyOn(http, 'put').mockResolvedValue({ data: rooms })
+    const put = vi.spyOn(client, 'api').mockResolvedValue(rooms)
     await saveSelection(1, 'rooms', { ...rooms, sessionVersion: 4 })
-    expect(put).toHaveBeenCalledWith('/sessions/1/rooms', { roomIds: rooms.roomIds, expectedVersion: 4 })
+    expect(put).toHaveBeenCalledWith('put', '/api/sessions/{id}/rooms', { path: { id: 1 }, body: { roomIds: rooms.roomIds, expectedVersion: 4 } })
   })
   it('uses admin writes, catalog reads, and optimistic versions', async () => {
     const row = initialDatabase().groups[0]
-    const request = vi.spyOn(http, 'request').mockResolvedValue({ data: row })
-    const get = vi.spyOn(http, 'get').mockResolvedValue({ data: { items: [], totalPages: 0 } })
+    const request = vi.spyOn(client, 'api')
+      .mockResolvedValueOnce(row)
+      .mockResolvedValueOnce({ items: [row], page: 2, size: 20, total: 41 })
     await saveRecord('groups', { name: row.name, studentIds: [] }, row)
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ url: '/admin/groups/1', method: 'PUT', data: expect.objectContaining({ expectedVersion: 1 }) }))
-    await listRecords('groups', 2, 'P3410')
-    expect(get).toHaveBeenCalledWith('/university/groups', { params: { page: 2, size: 20, search: 'P3410' } })
+    expect(request).toHaveBeenCalledWith('put', '/api/admin/groups/{id}', { path: { id: 1 }, body: expect.objectContaining({ expectedVersion: 1 }) })
+    expect(await listRecords('groups', 2, 'P3410')).toMatchObject({ items: [row], totalElements: 41, totalPages: 3 })
+    expect(request).toHaveBeenCalledWith('get', '/api/university/groups', { query: { page: 2, size: 20, search: 'P3410' } })
+  })
+  it('continues requesting session events until the backend total is covered', async () => {
+    vi.stubEnv('VITE_MOCK_API', 'true')
+    const { events: [example] } = await createEvents(1, { eventTypeId: 4, expectedVersion: 1, studyGroupIds: [1], studentIds: [] })
+    vi.stubEnv('VITE_MOCK_API', 'false')
+    const firstEvent = { ...example, id: 100 }
+    const lastEvent = { ...example, id: 101 }
+    const request = vi.spyOn(client, 'api')
+      .mockResolvedValueOnce({ items: [firstEvent], page: 0, size: 100, total: 101 })
+      .mockResolvedValueOnce({ items: [lastEvent], page: 1, size: 100, total: 101 })
+    expect(await listEvents(7)).toEqual([firstEvent, lastEvent])
+    expect(request).toHaveBeenNthCalledWith(2, 'get', '/api/sessions/{id}/events', {
+      path: { id: 7 }, query: { page: 1, size: 100 },
+    })
   })
   it('omits the read-only slot size from rule updates', async () => {
-    const put = vi.spyOn(http, 'put').mockResolvedValue({ data: defaultRules(2) })
+    const put = vi.spyOn(client, 'api').mockResolvedValue(defaultRules(2))
     await saveRules(1, defaultRules())
-    const body = put.mock.calls[0][1]
+    const body = put.mock.calls[0][2].body
     expect(body).toHaveProperty('expectedVersion', 1)
     expect(body).not.toHaveProperty('slotMinutes')
     expect(body).not.toHaveProperty('inputVersion')
@@ -192,30 +207,34 @@ describe('HTTP contract', () => {
     vi.stubEnv('VITE_MOCK_API', 'true')
     const event = (await createEvents(1, { eventTypeId: 4, expectedVersion: 1, studyGroupIds: [1], studentIds: [] })).events[0]
     vi.stubEnv('VITE_MOCK_API', 'false')
-    const put = vi.spyOn(http, 'put').mockResolvedValue({ data: event })
+    const put = vi.spyOn(client, 'api').mockResolvedValue(event)
     await updateEvent(event, { ...event, expectedVersion: event.version })
-    expect(put).toHaveBeenCalledWith('/sessions/1/events/1', expect.objectContaining({ expectedVersion: 1 }))
+    expect(put).toHaveBeenCalledWith('put', '/api/sessions/{id}/events/{eventId}', {
+      path: { id: 1, eventId: 1 }, body: expect.objectContaining({ expectedVersion: 1 }),
+    })
   })
   it('strips read-only fields when a response object is reused as form defaults', async () => {
     const type = initialDatabase()['event-types'][4]
-    const request = vi.spyOn(http, 'request').mockResolvedValue({ data: type })
+    const request = vi.spyOn(client, 'api').mockResolvedValue(type)
     await saveRecord('event-types', type, type)
-    const body = request.mock.calls[0][0]?.data
+    const body = request.mock.calls[0][2].body
     expect(body).not.toHaveProperty('id')
     expect(body).not.toHaveProperty('version')
     expect(body).toHaveProperty('expectedVersion', 1)
   })
   it('returns an updated account after a password response with no body', async () => {
     const account = { ...initialDatabase().accounts[0], hasPassword: false }
-    const put = vi.spyOn(http, 'put').mockResolvedValue({ data: undefined, status: 204 })
+    const put = vi.spyOn(client, 'api').mockResolvedValue(undefined)
     const password = 'x'.repeat(8)
     expect(await accountAction(account, 'password', password)).toEqual({ ...account, hasPassword: true })
     expect(account.hasPassword).toBe(false)
-    expect(put).toHaveBeenCalledWith('/admin/accounts/1/password', { expectedVersion: account.version, password })
+    expect(put).toHaveBeenCalledWith('put', '/api/admin/accounts/{id}/password', {
+      path: { id: 1 }, body: { expectedVersion: account.version, password },
+    })
   })
   it('rejects invalid passwords before sending a request and accepts 128 characters', async () => {
     const account = initialDatabase().accounts[0]
-    const put = vi.spyOn(http, 'put').mockResolvedValue({ data: undefined, status: 204 })
+    const put = vi.spyOn(client, 'api').mockResolvedValue(undefined)
     await expect(accountAction(account, 'password', 'x'.repeat(7))).rejects.toThrow('8')
     await expect(accountAction(account, 'password', ' '.repeat(8))).rejects.toThrow('непустой')
     await expect(accountAction(account, 'password', 'x'.repeat(129))).rejects.toThrow('128')
@@ -225,7 +244,7 @@ describe('HTTP contract', () => {
   it('keeps the account unchanged if setting the password fails', async () => {
     const account = { ...initialDatabase().accounts[0], hasPassword: false }
     const error = new Error('Password update failed')
-    vi.spyOn(http, 'put').mockRejectedValue(error)
+    vi.spyOn(client, 'api').mockRejectedValue(error)
     await expect(accountAction(account, 'password', 'test-password')).rejects.toBe(error)
     expect(account.hasPassword).toBe(false)
   })

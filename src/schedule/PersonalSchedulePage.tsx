@@ -2,12 +2,13 @@ import { Alert, Button, Chip, CircularProgress, Stack, Typography } from '@mui/m
 import ChevronLeft from '@mui/icons-material/ChevronLeft'
 import ChevronRight from '@mui/icons-material/ChevronRight'
 import { useCallback, useState } from 'react'
+import { isMockMode } from '../api/mode'
 import { authStore } from '../auth/authStore'
 import { localDate } from '../availability/time'
 import { DataTable, ErrorNotice, PageHeading, useLoad } from '../management/components'
 import { addDays, dateRange, dayLabel, timeRange, weekStart } from './dates'
 import { demoWeek } from './demoFixtures'
-import { scheduleDemo } from './demoRepository'
+import { scheduleRepository } from './repository'
 import { EventDetails } from './EventDetails'
 import { formatLabels, place, type ScheduleEvent } from './model'
 
@@ -18,11 +19,11 @@ export function PersonalSchedulePage() {
 }
 
 function PersonalSchedule({ timeZone }: { timeZone: string }) {
-  const [week, setWeek] = useState(weekStart(demoWeek))
+  const [week, setWeek] = useState(() => weekStart(isMockMode() ? demoWeek : localDate(new Date().toISOString(), timeZone)))
   const [selected, setSelected] = useState<ScheduleEvent | null>(null)
   const load = useCallback(() => {
     const range = dateRange(week, 7, timeZone)
-    return scheduleDemo.personalSchedule(range.from, range.to)
+    return scheduleRepository.personalSchedule(range.from, range.to)
   }, [week, timeZone])
   const state = useLoad(load)
   const zone = state.data?.timeZone ?? timeZone

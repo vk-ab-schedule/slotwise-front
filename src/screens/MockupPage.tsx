@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { colors } from '../theme'
 import { screenById, screens, type ScreenSpec } from './catalog'
 import { authStore } from '../auth/authStore'
-import { isMockMode } from '../api/http'
+import { isMockMode } from '../api/mode'
 
 const roleLabel = { STUDENT: 'Участник', TEACHER: 'Преподаватель', ORGANIZER: 'Организатор', ADMIN: 'Администратор' }
 const screenPath = (id: string) => id === '3:3' ? '/availability' : `/screens/${id}`

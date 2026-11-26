@@ -4,13 +4,13 @@ import { Link } from 'react-router-dom'
 import { allRecords, errorMessage } from './repository'
 import { createEvents, listEvents, uniqueEventParticipants, updateEvent, validateEvent } from './events'
 import { DataTable, ErrorNotice, FormFields, useLoad, validateFields, type Field, type FormValues } from './components'
-import { getSelections, getSession, publicPeople } from './sessions'
-import { peopleOptions } from './university'
+import { getSelections, getSession } from './sessions'
+import { peopleOptions, publicPeople } from './university'
 import { formatLabels, recordKey, type Schema } from './types'
 
 export function SessionEvents({ session }: { session: Schema['PlanningSessionResponse'] }) {
   const load = useCallback(async () => {
-    const [current, events, types, groups, people, equipment, selection, disciplines] = await Promise.all([getSession(session.id), listEvents(session.id), allRecords('event-types'), allRecords('groups'), publicPeople(), allRecords('equipment'), getSelections(session.id), allRecords('disciplines')])
+    const [current, events, types, groups, people, equipment, selection, disciplines] = await Promise.all([getSession(session.id), listEvents(session.id), allRecords('event-types'), allRecords('groups'), publicPeople(true), allRecords('equipment'), getSelections(session.id), allRecords('disciplines')])
     return { current, events, types, groups, people, equipment, selection, disciplines }
   }, [session.id])
   const state = useLoad(load)
