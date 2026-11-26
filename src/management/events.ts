@@ -32,21 +32,25 @@ export async function createEvents(id: number, input: Schema['CreateEventsReques
   const issues: Schema['ApiIssue'][] = [], events: Schema['EventResponse'][] = []
   for (const target of targets) {
     const supervisors = db.supervisions.filter(s => target.students.includes(s.studentId))
-    if (type.participantRoles.includes('SUPERVISOR') && target.students.some(studentId => !supervisors.some(s => s.studentId === studentId))) { issues.push({ code: 'MISSING_SUPERVISOR', severity: 'ERROR', message: `${target.label}: не указан научный руководитель; событие не создано.`, accountIds: target.students, eventIds: [], roomIds: [] }); continue }
+    const missingSupervisors = type.participantRoles.includes('SUPERVISOR')
+      ? target.students.filter(studentId => !supervisors.some(s => s.studentId === studentId))
+      : []
     const teachers = db.teachings.filter(t => t.groupId === target.groupId && t.disciplineId === input.disciplineId).map(t => t.teacherId)
     const participants = uniqueEventParticipants([
       ...target.students.map(accountId => ({ accountId, role: 'STUDENT' as const })),
       ...(type.participantRoles.includes('SUPERVISOR') ? supervisors.map(s => ({ accountId: s.supervisorId, role: 'SUPERVISOR' as const })) : []),
       ...(type.participantRoles.includes('DISCIPLINE_TEACHER') ? teachers.map(accountId => ({ accountId, role: 'DISCIPLINE_TEACHER' as const })) : []),
     ])
+    const missingTeacher = type.participantRoles.includes('DISCIPLINE_TEACHER') && teachers.length === 0
     const eventId = Math.max(0, ...db.events.map(e => e.id)) + 1
-    const event: Schema['EventResponse'] = { id: eventId, version: 1, sessionId: id, eventTypeId: type.id, title: `${type.name} · ${target.label}`, studyGroupId: target.groupId, disciplineId: input.disciplineId ?? null, durationMinutes: type.defaultDurationMinutes, format: type.defaultFormat, granularity: type.granularity, commissionSize: type.commissionSize, requiresChair: type.requiresChair, equipmentIds: [...type.equipmentIds], preparationDays: type.preparationDays, description: null, participants, complete: !type.participantRoles.includes('DISCIPLINE_TEACHER') || teachers.length > 0,
+    const event: Schema['EventResponse'] = { id: eventId, version: 1, sessionId: id, eventTypeId: type.id, title: `${type.name} · ${target.label}`, studyGroupId: target.groupId, disciplineId: input.disciplineId ?? null, durationMinutes: type.defaultDurationMinutes, format: type.defaultFormat, granularity: type.granularity, commissionSize: type.commissionSize, requiresChair: type.requiresChair, equipmentIds: [...type.equipmentIds], preparationDays: type.preparationDays, description: null, participants, complete: missingSupervisors.length === 0 && !missingTeacher,
       dependencies: type.dependencies.flatMap(d => db.events.filter(e => e.sessionId === id && e.eventTypeId === d.predecessorTypeId && e.participants.some(p => p.role === 'STUDENT' && target.students.includes(p.accountId))).map(e => ({ predecessorEventId: e.id, minGapDays: d.minGapDays, maxGapDays: d.maxGapDays }))),
     }
     db.events.push(event); events.push(event)
     db.eventRoles[event.id] = [...type.participantRoles]
     db.eventDependencies[event.id] = structuredClone(type.dependencies)
-    if (!event.complete) issues.push({ code: 'MISSING_TEACHER', severity: 'WARNING', message: `${event.title}: не найден преподаватель дисциплины. Событие сохранено как неполное.`, accountIds: [], eventIds: [event.id], roomIds: [] })
+    if (missingSupervisors.length > 0) issues.push({ code: 'MISSING_SUPERVISOR', severity: 'WARNING', message: `${event.title}: не найден научный руководитель. Событие сохранено как неполное.`, accountIds: missingSupervisors, eventIds: [event.id], roomIds: [] })
+    if (missingTeacher) issues.push({ code: 'MISSING_TEACHER', severity: 'WARNING', message: `${event.title}: не найден преподаватель дисциплины. Событие сохранено как неполное.`, accountIds: [], eventIds: [event.id], roomIds: [] })
   }
   // Connect copied template dependencies regardless of which event type was created first.
   // A manually edited dependency list is never replaced by later template expansion.

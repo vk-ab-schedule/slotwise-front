@@ -104,12 +104,17 @@ describe('persistent management repository', () => {
     const selections = await getSelections(1)
     await expect(saveSelection(1, 'participants', { ...selections.participants, studyGroupIds: [], accountIds: [] })).rejects.toThrow('используются в событиях')
   })
-  it('reports a missing supervisor without creating a guessed event', async () => {
+  it('keeps an event incomplete when a supervisor is missing', async () => {
     const db = initialDatabase(); db.supervisions = []; localStorage.setItem(managementStorageKey, JSON.stringify(db))
     const result = await createEvents(1, { eventTypeId: 5, expectedVersion: 1, studyGroupIds: [1], studentIds: [] })
-    expect(result.events).toHaveLength(0)
-    expect(result.issues[0].code).toBe('MISSING_SUPERVISOR')
-    expect(readDatabase().sessions[0].version).toBe(1)
+    expect(result.events).toHaveLength(1)
+    const [event] = result.events
+    expect(event).toMatchObject({ complete: false, participants: [{ accountId: 1, role: 'STUDENT' }] })
+    expect(result.issues).toEqual([expect.objectContaining({
+      code: 'MISSING_SUPERVISOR', severity: 'WARNING', accountIds: [1], eventIds: [event.id],
+    })])
+    expect(await listEvents(1)).toEqual([event])
+    expect(readDatabase().sessions[0].version).toBe(2)
   })
   it('resolves template dependencies even when a defense was created first', async () => {
     await createEvents(1, { eventTypeId: 5, expectedVersion: 1, studyGroupIds: [1], studentIds: [] })
