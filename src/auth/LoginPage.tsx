@@ -3,7 +3,7 @@ import { observer } from 'mobx-react-lite'
 import { useState, type FormEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { authStore } from './authStore'
-import { isMockMode } from '../api/http'
+import { isMockMode } from '../api/mode'
 
 export const LoginPage = observer(function LoginPage() {
   const navigate = useNavigate()

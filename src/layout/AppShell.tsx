@@ -1,8 +1,8 @@
-import { Box, Button, Chip, Stack, Typography } from '@mui/material'
+import { Alert, Box, Button, Chip, Stack, Typography } from '@mui/material'
 import { observer } from 'mobx-react-lite'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { authStore, type Role } from '../auth/authStore'
-import { isMockMode } from '../api/http'
+import { isMockMode } from '../api/mode'
 import mark from '../assets/my-itmo-mark.svg'
 import home from '../assets/home.svg'
 import calendar from '../assets/calendar.svg'
@@ -62,6 +62,7 @@ export const AppShell = observer(function AppShell() {
         {user && <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mb: 2.5 }}>
           {tabs.map(([label, path]) => <Chip key={path} component={NavLink} to={path} clickable label={label} sx={{ borderRadius: 1, fontSize: 12, bgcolor: location.pathname.startsWith(path) ? colors.light : '#fff', color: location.pathname.startsWith(path) ? colors.blue : colors.muted, fontWeight: 500 }} />)}
         </Stack>}
+        {user && authStore.error && <Alert severity="error" sx={{ mb: 2 }}>{authStore.error}</Alert>}
         <Outlet />
       </Box>
     </Box>
