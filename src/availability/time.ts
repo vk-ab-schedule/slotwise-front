@@ -36,6 +36,17 @@ export function localTime(iso: string, timeZone: string) {
   return `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`
 }
 
+export function localDateTime(iso: string, timeZone: string) {
+  return `${localDate(iso, timeZone)}T${localTime(iso, timeZone)}`
+}
+
+export function parseLocalDateTime(value: string, timeZone: string) {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null
+  const [date, time] = value.split('T')
+  const iso = zonedDateTimeToIso(date, time, timeZone)
+  return localDateTime(iso, timeZone) === value ? iso : null
+}
+
 // Mirrors the server's 5-minute rounding, work-hour clipping and strongest-priority overlap rule in demo mode.
 export function normalizeIntervals(inputs: IntervalInput[], timeZone: string, firstDay: string, lastDay: string, workStart: string, workEnd: string): IntervalInput[] {
   const segments: { start: number; end: number; importance: Importance }[] = []

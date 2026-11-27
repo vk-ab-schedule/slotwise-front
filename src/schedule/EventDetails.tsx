@@ -4,7 +4,9 @@ import { timeRange } from './dates'
 import { personName } from '../management/types'
 import { formatLabels, place, roleLabels, type Assignment, type ScheduleEvent } from './model'
 
-export function EventDetails({ event, zone, onClose }: { event: Assignment | ScheduleEvent | null; zone: string; onClose: () => void }) {
+export function EventDetails({ event, zone, onClose, onEdit }: {
+  event: Assignment | ScheduleEvent | null; zone: string; onClose: () => void; onEdit?: () => void
+}) {
   return <Dialog open={event !== null} onClose={onClose} fullWidth maxWidth="sm" aria-labelledby="schedule-event-title">
     {event && <>
       <DialogTitle id="schedule-event-title">{event.title}</DialogTitle>
@@ -31,7 +33,10 @@ export function EventDetails({ event, zone, onClose }: { event: Assignment | Sch
           </Stack>}
         </Stack>
       </DialogContent>
-      <DialogActions><Button onClick={onClose}>Закрыть</Button></DialogActions>
+      <DialogActions>
+        <Button onClick={onClose}>Закрыть</Button>
+        {onEdit && <Button variant="contained" onClick={onEdit}>Изменить назначение</Button>}
+      </DialogActions>
     </>}
   </Dialog>
 }

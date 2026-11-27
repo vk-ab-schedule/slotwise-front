@@ -42,7 +42,7 @@ function ScheduleWorkspace({ session }: { session: Session }) {
   const configuration = useLoad(loadConfig)
   const [selected, setSelected] = useState<number>()
   const load = useCallback(() => scheduleRepository.listVariants(session.id), [session.id])
-  const variants = useLoad(load)
+  const variants = useLoad(load, true)
   const refreshVariants = variants.reload
   const selectResult = useCallback((id: number) => {
     setSelected(id)
@@ -69,7 +69,7 @@ function ScheduleWorkspace({ session }: { session: Session }) {
       </TextField>
       <Button onClick={reload}>Обновить данные</Button>
     </Stack> : <Alert severity="info" action={<Button onClick={reload}>Обновить</Button>}>У сессии ещё нет вариантов. Проверьте данные и запустите расчёт.</Alert>)}
-    {variantId !== undefined && <LoadedVariant key={variantId} id={variantId} session={currentSession} />}
+    {variantId !== undefined && <LoadedVariant key={variantId} id={variantId} session={currentSession} onUpdated={refreshVariants} />}
   </>
 }
 
@@ -78,12 +78,16 @@ async function loadWorkspaceConfig(id: number) {
   return { ...config, solvers, job }
 }
 
-function LoadedVariant({ id, session }: { id: number; session: Session }) {
+function LoadedVariant({ id, session, onUpdated }: { id: number; session: Session; onUpdated: () => void }) {
   const load = useCallback(() => scheduleRepository.getVariant(id), [id])
-  const state = useLoad(load)
+  const state = useLoad(load, true)
   return <>
     <ErrorNotice error={state.error} retry={state.reload} />
     {state.loading && <CircularProgress aria-label="Загрузка назначений" />}
-    {state.data && <VariantView variant={state.data} session={session} />}
+    {state.data && <VariantView variant={state.data} session={session}
+      onReload={state.reload}
+      onPublished={published => { state.setData(published); onUpdated() }}
+      onAssignmentSaved={() => { state.reload(); onUpdated() }}
+    />}
   </>
 }

@@ -20,7 +20,17 @@ export const loadCatalogs = async () => {
 }
 export type Catalogs = Awaited<ReturnType<typeof loadCatalogs>>
 const names = (rows: { id: number; name: string }[]): Option[] => rows.map(r => ({ value: r.id, label: r.name }))
-export const peopleOptions = (rows: Schema['PersonSummary'][]): Option[] => rows.map(r => ({ value: r.id, label: personName(r) }))
+export function peopleOptions(rows: Schema['PersonSummary'][]): Option[] {
+  const counts = new Map<string, number>()
+  for (const person of rows) {
+    const name = personName(person)
+    counts.set(name, (counts.get(name) ?? 0) + 1)
+  }
+  return rows.map(person => {
+    const name = personName(person)
+    return { value: person.id, label: counts.get(name) === 1 ? name : `${name} · №${person.id}` }
+  })
+}
 export const timeZoneValid = (value: unknown) => { try { new Intl.DateTimeFormat('ru', { timeZone: String(value) }).format(); return true } catch { return false } }
 export function universityFields(section: UniversitySection, catalog: Catalogs, editing: boolean): Field[] {
   const name: Field = { name: 'name', label: 'Название', required: true }

@@ -551,7 +551,7 @@ export interface paths {
         };
         /**
          * Poll calculation status and progress
-         * @description ORGANIZER owner of the job's session only; inaccessible jobs return 404. QUEUED, RUNNING, COMPLETED, FAILED and CANCELLED describe execution, while solveStatus describes the solver result. COMPLETED may have NO_SOLUTION and a null resultId; only FAILED denotes a technical error. A completed feasible or optimal result links to a draft variant. Unavailable progress, quality, queue position, error, result and timestamps are explicit nulls.
+         * @description ORGANIZER owner of the job's session only; inaccessible jobs return 404. QUEUED, RUNNING, COMPLETED, FAILED and CANCELLED describe execution, while solveStatus describes the solver result. COMPLETED may have NO_SOLUTION and a null resultId; only FAILED denotes a technical error. A completed feasible or optimal result links to a draft variant. Unavailable progress, quality, queue position, error, result and timestamps are explicit nulls. Completed quality and solveStatus describe the original calculation. Progress is the elapsed share of the time limit. Error codes: SOLVER_FAILED, and INTERRUPTED for jobs left unfinished by a server restart; both may be launched again.
          */
         get: operations["getSolverJob"];
         put?: never;
@@ -829,7 +829,7 @@ export interface paths {
         put?: never;
         /**
          * Check planning input before solving
-         * @description ORGANIZER owner only. Checks expectedInputVersion against the current session input version (409 on mismatch), then reports basic problems linked to events, people and rooms. Missing responses are warnings: those people remain available during working hours except for known timetable commitments. Problems do not prohibit a subsequent solve. Does not modify data or start a job; diagnostics do not prove infeasibility.
+         * @description ORGANIZER owner only. Checks expectedInputVersion against the current session input version (409 STALE_INPUT_VERSION on mismatch), then reports basic problems linked to events, people and rooms: the M6 prechecks, INCOMPLETE_EVENTS that do not take part in solving and NOT_RESPONDED participants. Missing responses are warnings: those people remain available during working hours except for known timetable commitments. Problems do not prohibit a subsequent solve. Does not modify data or start a job; diagnostics do not prove infeasibility.
          */
         post: operations["precheckSession"];
         delete?: never;
@@ -897,7 +897,7 @@ export interface paths {
         put?: never;
         /**
          * Queue a manual calculation
-         * @description ORGANIZER owner only. Snapshots input at expectedInputVersion; a version mismatch is 409. May run before collection closes; such results are marked incomplete and retain missing respondents. Reuses an identical request for the same session, input version, algorithm and parameters; if the session already has an active calculation, returns that job. Otherwise queues a job with its queue position. Any signed seed is valid. Optional baseVariantId must belong to this session; its assignments provide the baseline for S5 and its locks enforce H9. Poll getSolverJob for progress and best known quality (unassigned events, then penalty). Completion creates a validated draft when a solution exists; it never publishes automatically. A time limit without a solution is NO_SOLUTION, not a proof of infeasibility or a technical failure.
+         * @description ORGANIZER owner only. A mismatched input version returns 409 STALE_INPUT_VERSION, and an unavailable algorithm returns 409 SOLVER_UNAVAILABLE. Returns any active job of the session first. Otherwise it reuses a completed job for the same input, algorithm, parameters and base variant version, or queues a new one. A new run records whether collection was open or responses were missing at launch. Any signed seed is valid. The optional baseVariantId must belong to the session (404 VARIANT_NOT_FOUND). Its assignments provide the S5 baseline and its locks remain in the new draft. Conflicting locks return 409 PINNED_CONFLICT with issues. Poll getSolverJob for progress and quality. A valid solution creates a draft; a run without a solution completes with NO_SOLUTION. Publication is a separate operation.
          */
         post: operations["solveSession"];
         delete?: never;
@@ -1230,7 +1230,7 @@ export interface paths {
         };
         /**
          * Get the complete schedule variant
-         * @description ORGANIZER owner only; inaccessible variants return 404. Returns every assignment, including UNASSIGNED events, both variant and assignment versions, locks, participant names, resources, commissions, metrics, input provenance and basic explanations. Metrics come from the shared validator, not a solver's self-evaluation. Explanations are limited precheck diagnostics and do not claim a unique cause. Stale data and missing respondents are explicit. FEASIBLE does not claim optimality; bound and gap are null when unknown.
+         * @description ORGANIZER owner only; inaccessible variants return 404. Returns every assignment, including complete events added after a draft was calculated, as UNASSIGNED. Returns both versions, locks, participant names, resources, commissions, metrics, input provenance and basic explanations. Metrics come from the shared validator, not a solver's self-evaluation. Explanations are limited precheck diagnostics and do not claim a unique cause. Stale data and missing respondents are explicit. FEASIBLE does not claim optimality; bound and gap are null when unknown.
          */
         get: operations["getVariant"];
         put?: never;
@@ -1256,7 +1256,7 @@ export interface paths {
         head?: never;
         /**
          * Validate or save an assignment and its lock
-         * @description ORGANIZER owner only, DRAFT variants only. Supplies the complete editable assignment, including explicit locked and commissionMembers, and checks expectedVariantVersion and expectedAssignmentVersion; concurrent changes or an immutable variant return 409. ASSIGNED requires start/end, the selected physical room or online platform, and a valid commission. Times are UTC instants on 5-minute boundaries, end follows start and duration matches the event. UNASSIGNED clears times/resource/commission. The same domain validator checks H1-H9 and recomputes (U, P) with S1-S5 and preparation days H10: hard violations return 422 with issues and never persist. dryRun=true returns a preview, metrics and affected account IDs without changing either version. Saving atomically changes the assignment and variant versions. Locking enforces H9 in later solves; it does not publish. A conflicting lock is never silently removed.
+         * @description ORGANIZER owner only, DRAFT variants only. Supplies the complete editable assignment, including explicit locked and commissionMembers, and checks expectedVariantVersion and expectedAssignmentVersion; concurrent changes or an immutable variant return 409. ASSIGNED requires start/end, the selected physical room or online platform, and a valid commission. Times are UTC instants on 5-minute boundaries, end follows start and duration matches the event. UNASSIGNED clears times/resource/commission. The same domain validator checks H1-H9 and recomputes (U, P) with S1-S5 and preparation days H10 on the current session data: violations involving the edited event return 422 HARD_VIOLATIONS with issues and never persist; a malformed assignment returns 422 INVALID_ASSIGNMENT, stale versions 409 STALE_VARIANT_VERSION. dryRun=true returns a preview, metrics and affected account IDs without changing either version. Saving atomically changes both versions. Remaining hard violations in other assignments are returned in issues and the draft reports NO_SOLUTION until it is feasible. Locking enforces H9 in later solves; it does not publish. A conflicting lock is never silently removed.
          */
         patch: operations["updateAssignment"];
         trace?: never;
@@ -1292,7 +1292,7 @@ export interface paths {
         put?: never;
         /**
          * Publish the whole schedule variant
-         * @description ORGANIZER owner only. Publishes the entire validated DRAFT variant atomically and marks the previous publication SUPERSEDED. No subset of assignments can be selected. Checks expectedVersion (409 on a concurrent edit). Hard violations block publication with 422, regardless of confirmation flags. confirmUnassigned and confirmStaleData must both be explicitly supplied; each must be true when the corresponding condition exists, otherwise 422 reports the required confirmation. Unassigned events remain visible to the organizer. Repeating publication of the current published variant has no additional effect. Participants see only the current publication; published assignments cannot be edited.
+         * @description ORGANIZER owner only. Publishes the entire validated DRAFT variant atomically and marks the previous publication SUPERSEDED. No subset of assignments can be selected. Checks expectedVersion (409 STALE_VARIANT_VERSION on a concurrent edit; 409 VARIANT_NOT_DRAFT for a superseded variant). Hard violations block publication with 422 HARD_VIOLATIONS, regardless of confirmation flags. confirmUnassigned and confirmStaleData must both be explicitly supplied; each must be true when the corresponding condition exists, otherwise 422 UNASSIGNED_NOT_CONFIRMED lists unassigned events and STALE_DATA_NOT_CONFIRMED requests stale-data confirmation. Unassigned events remain visible in the published variant. Repeating publication of the current published variant has no additional effect. Participants see only the current publication; published assignments cannot be edited.
          */
         post: operations["publishVariant"];
         delete?: never;
@@ -2232,7 +2232,7 @@ export interface components {
             quality: components["schemas"]["SolverJobQuality"] | null;
             /**
              * Format: int32
-             * @description One-based position while queued; null outside the queue
+             * @description One-based position in the execution queue, or null when unavailable
              */
             queuePosition: number | null;
             /**
@@ -6122,15 +6122,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     getPersonalSchedule: {
@@ -6210,15 +6201,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7975,15 +7957,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     getSessionRooms: {
@@ -8421,15 +8394,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     listSessionVariants: {
@@ -8518,15 +8482,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     listSolvers: {
@@ -8603,15 +8558,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10101,15 +10047,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
         };
     };
     updateAssignment: {
@@ -10195,15 +10132,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10388,15 +10316,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ApiProblem"];
-                };
-            };
-            /** @description Contract stub; business operation is not implemented */
-            501: {
                 headers: {
                     [name: string]: unknown;
                 };

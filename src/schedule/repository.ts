@@ -4,6 +4,7 @@ import { isMockMode } from '../api/mode'
 import { loadPages } from '../api/page'
 import { authStore } from '../auth/authStore'
 import { getRules } from '../management/rules'
+import type { Schema } from '../management/types'
 import { scheduleDemo } from './demoRepository'
 import type { SolveRequest } from './model'
 
@@ -47,3 +48,9 @@ const scheduleApi = {
 } satisfies typeof scheduleDemo
 
 export const scheduleRepository = isMockMode() ? scheduleDemo : scheduleApi
+
+export const publishVariant = (id: number, body: Schema['PublishVariantRequest']) =>
+  api('post', '/api/variants/{id}/publish', { path: { id }, body })
+
+export const updateAssignment = (id: number, eventId: number, body: Schema['AssignmentUpdateRequest'], dryRun: boolean) =>
+  api('patch', '/api/variants/{id}/assignments/{eventId}', { path: { id, eventId }, query: { dryRun }, body })

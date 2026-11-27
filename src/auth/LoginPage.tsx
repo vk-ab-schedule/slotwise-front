@@ -16,10 +16,10 @@ export const LoginPage = observer(function LoginPage() {
   }
   return <Box sx={{ maxWidth: 530 }}>
     <Typography variant="h4">Вход в SlotWise</Typography>
-    <Typography color="text.secondary" variant="body2" sx={{ mb: 4 }}>Отдельный стенд MVP · для целевой интеграции используется сессия my.itmo</Typography>
+    <Typography color="text.secondary" variant="body2" sx={{ mb: 4 }}>Войдите с помощью электронной почты и пароля.</Typography>
     <Stack component="form" onSubmit={event => void submit(event)} gap={2.5}>
-      <TextField label="Email" type="email" required autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} />
-      <TextField label="Пароль" type="password" required autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} />
+      <TextField label="Email" type="email" required disabled={authStore.loading} autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} />
+      <TextField label="Пароль" type="password" required disabled={authStore.loading} autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} />
       {authStore.error && <Alert severity="error">{authStore.error}</Alert>}
       <Button type="submit" variant="contained" disabled={authStore.loading} sx={{ width: 135 }}>Войти</Button>
     </Stack>
