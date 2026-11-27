@@ -143,8 +143,8 @@ function JobStatus({ job, pollError, retry, openResult }: { job: SolverJob; poll
       {job.status === 'FAILED' && <Alert severity="error">{job.error?.message ?? 'Расчёт завершился технической ошибкой.'} Проверьте данные и повторите запуск.</Alert>}
       {job.status === 'CANCELLED' && <Alert severity="warning">Можно запустить новый расчёт.</Alert>}
       {job.status === 'COMPLETED' && job.solveStatus === 'NO_SOLUTION' && <Alert severity="warning">За отведённое время решение не найдено. Попробуйте увеличить лимит или выбрать другой алгоритм.</Alert>}
-      {resultId !== null && <Alert severity={job.solveStatus === 'OPTIMAL' ? 'success' : 'info'} action={<Button color="inherit" onClick={() => openResult(resultId)}>Открыть черновик</Button>}>
-        Черновик №{resultId} готов. {job.solveStatus && qualityLabels[job.solveStatus]}.
+      {resultId !== null && <Alert severity={job.solveStatus === 'OPTIMAL' ? 'success' : 'info'} action={<Button color="inherit" onClick={() => openResult(resultId)}>Открыть вариант</Button>}>
+        Вариант №{resultId} готов. {job.solveStatus && qualityLabels[job.solveStatus]}.
       </Alert>}
     </Stack>
   </Paper>
