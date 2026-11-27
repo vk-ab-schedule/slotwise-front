@@ -1,0 +1,87 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { importUniversity, parseImport } from './importRepository'
+import { managementStorageKey, readDatabase } from './repository'
+import * as client from '../api/client'
+
+beforeEach(() => {
+  const storage = new Map<string, string>()
+  vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) })
+  vi.stubEnv('VITE_MOCK_API', 'true')
+})
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs() })
+
+const document = {
+  accounts: [{ externalId: 'import-student', firstName: 'Иван', lastName: 'Тестов', email: 'import@example.test', role: 'STUDENT', timeZone: 'Europe/Moscow', passwordHash: '{bcrypt}private-hash' }],
+  groups: [{ externalId: 'import-group', name: 'P1111', students: ['import-student'] }],
+  rooms: [{ externalId: 'import-room', name: '101', capacity: 20, equipment: ['Экран'] }],
+  timetable: [{ account: 'import-student', start: '2026-06-15T09:00:00Z', end: '2026-06-15T10:00:00Z' }],
+}
+describe('university JSON import', () => {
+  it.each(['{', '[]', '{"unknown":[]}', '{"accounts":{}}', '{"groups":[null]}'])('rejects malformed structure %s', text => {
+    expect(() => parseImport(text)).toThrow()
+  })
+  it('does not mutate storage during preview and resolves references within the file', async () => {
+    const result = await importUniversity(parseImport(JSON.stringify(document)), true)
+    expect(result.summary).toMatchObject({ total: 4, created: 4, rejected: 0 })
+    expect(result.applied).toBe(false)
+    expect(localStorage.getItem(managementStorageKey)).toBeNull()
+  })
+  it('applies idempotently without persisting credentials', async () => {
+    const input = parseImport(JSON.stringify(document))
+    expect((await importUniversity(input, false)).applied).toBe(true)
+    expect((await importUniversity(input, false)).summary).toMatchObject({ created: 0, updated: 0, unchanged: 4 })
+    expect(readDatabase().groups.find(g => g.externalId === 'import-group')?.studentIds).toHaveLength(1)
+    expect(localStorage.getItem(managementStorageKey)).not.toContain('private-hash')
+  })
+  it('requires explicit partial import and reports dependent invalid records', async () => {
+    const input = parseImport(JSON.stringify({ ...document, groups: [{ externalId: 'bad-group', students: ['missing'] }] }))
+    const rejected = await importUniversity(input, false)
+    expect(rejected.applied).toBe(false)
+    expect(rejected.diagnostics[0].path).toBe('groups[0]')
+    expect(localStorage.getItem(managementStorageKey)).toBeNull()
+    const partial = await importUniversity(input, false, true)
+    expect(partial.applied).toBe(true)
+    expect(partial.summary.rejected).toBe(1)
+    expect(readDatabase().groups.some(g => g.externalId === 'bad-group')).toBe(false)
+    expect(readDatabase().accounts.some(a => a.externalId === 'import-student')).toBe(true)
+  })
+  it('does not leak a bad password hash in diagnostics', async () => {
+    const input = parseImport(JSON.stringify({ accounts: [{ ...document.accounts[0], email: 'bad-email' }] }))
+    expect(JSON.stringify(await importUniversity(input, true))).not.toContain('private-hash')
+  })
+  it('does not add equipment from a rejected room during partial import', async () => {
+    const existingRoom = readDatabase().rooms[0]
+    const result = await importUniversity(parseImport(JSON.stringify({
+      ...document,
+      rooms: [
+        ...document.rooms,
+        { externalId: 'duplicate-room', name: existingRoom.name, capacity: 20, equipment: ['Оборудование отклонённой аудитории'] },
+      ],
+    })), false, true)
+    expect(result.applied).toBe(true)
+    expect(result.sections.rooms).toMatchObject({ created: 1, rejected: 1 })
+    expect(readDatabase().equipment.map(e => e.name)).toContain('Экран')
+    expect(readDatabase().equipment.map(e => e.name)).not.toContain('Оборудование отклонённой аудитории')
+  })
+  it('requires exactly one target per timetable entry in preview and partial import', async () => {
+    const interval = { start: '2026-06-15T09:00:00Z', end: '2026-06-15T10:00:00Z' }
+    const input = parseImport(JSON.stringify({ ...document, timetable: [
+      { ...interval, account: 'import-student' },
+      { ...interval, room: 'import-room' },
+      { ...interval, account: 'import-student', room: 'import-room' },
+      interval,
+    ] }))
+    const preview = await importUniversity(input, true)
+    expect(preview.diagnostics.map(d => d.path)).toEqual(['timetable[2]', 'timetable[3]'])
+    const result = await importUniversity(input, false, true)
+    expect(result.sections.timetable).toMatchObject({ created: 2, rejected: 2 })
+    expect(readDatabase().timetable.filter(t => t.externalId?.startsWith('import:'))).toHaveLength(2)
+  })
+  it('sends the immutable preview input as JSON with explicit flags', async () => {
+    vi.stubEnv('VITE_MOCK_API', 'false')
+    const request = vi.spyOn(client, 'api').mockResolvedValue(undefined)
+    const input = parseImport(JSON.stringify(document))
+    await importUniversity(input, true)
+    expect(request).toHaveBeenCalledWith('post', '/api/admin/import', { body: input, query: { dryRun: true, allowPartial: false } })
+  })
+})
