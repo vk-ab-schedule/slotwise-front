@@ -84,6 +84,7 @@ export function CalculationPanel({ session, rules, solvers, initialJob, onResult
       setPollError('')
       setCheck(null)
       setExpanded(false)
+      if (next.status === 'COMPLETED' && next.resultId !== null) onResult(next.resultId)
     } catch (error) {
       setActionError(errorMessage(error))
     } finally {
