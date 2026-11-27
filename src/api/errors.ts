@@ -13,7 +13,7 @@ export function errorMessage(error: unknown, fallback = 'Не удалось в�
   if (error.response?.status === 409 && /STALE|VERSION|REVISION/i.test(problem?.code ?? '')) {
     return 'Данные изменились. Обновите страницу и повторите изменения.'
   }
-  if (error.response?.status === 501) return 'Эта операция ещё не реализована на сервере. Попробуйте позже.'
+  if (error.response?.status === 501) return 'Действие недоступно. Обратитесь к администратору.'
   return [
     problem?.detail,
     ...(problem?.fieldErrors?.map(item => `${item.field}: ${item.message}`) ?? []),

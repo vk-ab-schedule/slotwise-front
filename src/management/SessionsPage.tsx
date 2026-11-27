@@ -1,6 +1,7 @@
 import { Alert, Box, Button, Chip, CircularProgress, Paper, Stack, Tab, Tabs, TextField, Typography } from '@mui/material'
 import { useCallback, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { isMockMode } from '../api/mode'
 import { DataTable, ErrorNotice, FormFields, PageHeading, useLoad, validateFields } from './components'
 import { allRecords, errorMessage, saveRecord } from './repository'
 import { getSession, sessionDefaults, sessionFields, sessionPayload, validateSession } from './sessions'
@@ -42,9 +43,12 @@ export function NewSessionPage() { return <Box><PageHeading title="Новая с
 export function SessionDetailPage({ tab, children }: { tab: string; children?: (session: Schema['PlanningSessionResponse'], reload: () => void) => ReactNode }) {
   const { id } = useParams(), sessionId = Number(id)
   const load = useCallback(() => Number.isSafeInteger(sessionId) && sessionId > 0 ? getSession(sessionId) : Promise.reject(new Error('Некорректный идентификатор сессии.')), [sessionId])
-  const state = useLoad(load)
+  const state = useLoad(load, true)
   return <Box><PageHeading title={state.data?.name ?? 'Сессия планирования'} subtitle={state.data ? `${period(state.data)} · ${state.data.timeZone} · ${collectionLabels[state.data.collectionStatus]}` : 'Подготовка сессии'} />
-    <Tabs value={tab} variant="scrollable" scrollButtons="auto" sx={{ mb: 3 }} aria-label="Разделы сессии">{[['parameters', 'Параметры', ''], ['resources', 'Участники и ресурсы', '/resources'], ['events', 'События', '/events'], ['rules', 'Правила', '/rules']].map(([key, label, path]) => <Tab key={key} value={key} label={label} component={Link} to={`/organizer/sessions/${id}${path}`} />)}</Tabs>
+    <Tabs value={tab} variant="scrollable" scrollButtons="auto" sx={{ mb: 3 }} aria-label="Разделы сессии">{[
+      ['parameters', 'Параметры', ''], ['resources', 'Участники и ресурсы', '/resources'], ['events', 'События', '/events'],
+      ...(!isMockMode() ? [['collection', 'Сбор занятости', '/collection']] : []), ['rules', 'Правила', '/rules'],
+    ].map(([key, label, path]) => <Tab key={key} value={key} label={label} component={Link} to={`/organizer/sessions/${id}${path}`} />)}</Tabs>
     <ErrorNotice error={state.error} retry={state.reload} />{state.loading && <CircularProgress aria-label="Загрузка сессии" />}
     {state.data && (children ? children(state.data, state.reload) : <SessionEditor key={`${state.data.id}-${state.data.version}`} session={state.data} onSaved={state.reload} />)}
     {state.data && <Button component={Link} to={`/organizer/schedule/${state.data.id}`} sx={{ mt: 2 }}>Расписание и расчёт</Button>}

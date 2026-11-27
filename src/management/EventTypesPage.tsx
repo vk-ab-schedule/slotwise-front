@@ -1,5 +1,6 @@
 import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Paper, Stack, TextField, Typography } from '@mui/material'
 import { useCallback, useState } from 'react'
+import { isMockMode } from '../api/mode'
 import { DataTable, ErrorNotice, FormFields, PageHeading, useLoad, validateFields, type Field } from './components'
 import { allRecords, errorMessage, listRecords, saveRecord } from './repository'
 import { deleteEventType, emptyEventType, validateEventType } from './eventTypes'
@@ -10,18 +11,44 @@ export function EventTypesPage() {
   const [deleting, setDeleting] = useState<Schema['EventTypeResponse']>(), [pending, setPending] = useState(false), [error, setError] = useState(''), [success, setSuccess] = useState('')
   const load = useCallback(async () => ({ page: await listRecords('event-types', page, search), types: await allRecords('event-types'), equipment: await allRecords('equipment') }), [page, search])
   const state = useLoad(load)
-  return <Box><PageHeading title="Типы событий" subtitle="Шаблоны для организаторов · изменения применяются к новым событиям" /><Stack gap={2.5}>
-    <Stack direction="row" gap={2}><TextField label="Поиск по названию" value={search} onChange={e => { setSearch(e.target.value); setPage(0) }} sx={{ flex: 1 }} /><Button variant="contained" disabled={!state.data} onClick={() => setEditing(null)}>Создать тип</Button><Button onClick={state.reload}>Обновить</Button></Stack>
+  const canWrite = isMockMode()
+  return <Box><PageHeading title="Типы событий" subtitle="Шаблоны событий для сессий планирования" /><Stack gap={2.5}>
+    <Stack direction="row" gap={2}><TextField label="Поиск по названию" value={search} onChange={e => { setSearch(e.target.value); setPage(0) }} sx={{ flex: 1 }} />{canWrite && <Button variant="contained" disabled={!state.data} onClick={() => setEditing(null)}>Создать тип</Button>}<Button onClick={state.reload}>Обновить</Button></Stack>
     <ErrorNotice error={state.error || error} retry={state.reload} />{success && <Alert severity="success" onClose={() => setSuccess('')}>{success}</Alert>}
     {state.loading && <CircularProgress aria-label="Загрузка типов событий" />}
     {state.data && <DataTable rows={state.data.page.items} rowKey={recordKey} page={page} count={state.data.page.totalElements} onPage={setPage} columns={[
       { label: 'Тип', render: t => t.name }, { label: 'Длительность', render: t => `${t.defaultDurationMinutes} мин` },
       { label: 'Гранулярность', render: t => granularityLabels[t.granularity] }, { label: 'Комиссия', render: t => t.commissionSize ? `${t.commissionSize} чел.${t.requiresChair ? ', включая председателя' : ''}` : 'Не нужна' },
-      { label: 'Состояние', render: t => t.active ? 'Активен' : 'Скрыт' }, { label: 'Действия', render: t => <Stack direction="row"><Button onClick={() => setEditing(t)}>Редактировать</Button><Button color="error" onClick={() => { setError(''); setDeleting(t) }}>Удалить</Button></Stack> },
+      { label: 'Состояние', render: t => t.active ? 'Активен' : 'Скрыт' }, { label: 'Действия', render: t => <Stack direction="row"><Button onClick={() => setEditing(t)}>{canWrite ? 'Редактировать' : 'Открыть'}</Button>{canWrite && <Button color="error" onClick={() => { setError(''); setDeleting(t) }}>Удалить</Button>}</Stack> },
     ]} />}
-    {editing !== undefined && state.data && <EventTypeEditor type={editing ?? undefined} types={state.data.types} equipment={state.data.equipment} onClose={() => setEditing(undefined)} onSaved={() => { setEditing(undefined); setSuccess('Шаблон сохранён. Созданные ранее события не изменены.'); state.reload() }} />}
+    {!canWrite && editing && state.data && <EventTypeDetails type={editing} types={state.data.types} equipment={state.data.equipment} onClose={() => setEditing(undefined)} />}
+    {canWrite && editing !== undefined && state.data && <EventTypeEditor type={editing ?? undefined} types={state.data.types} equipment={state.data.equipment} onClose={() => setEditing(undefined)} onSaved={() => { setEditing(undefined); setSuccess('Шаблон сохранён. Созданные ранее события не изменены.'); state.reload() }} />}
     <Dialog open={Boolean(deleting)} onClose={() => { if (!pending) setDeleting(undefined) }}><DialogTitle>Удалить тип «{deleting?.name}»?</DialogTitle><DialogContent><ErrorNotice error={error} />Использованный тип нельзя удалить. Его можно скрыть из выбора при редактировании.</DialogContent><DialogActions><Button disabled={pending} onClick={() => setDeleting(undefined)}>Отмена</Button><Button color="error" disabled={pending} onClick={async () => { if (!deleting) return; setPending(true); setError(''); try { await deleteEventType(deleting); setDeleting(undefined); state.reload(); setSuccess('Тип удалён.') } catch (e) { setError(errorMessage(e)) } finally { setPending(false) } }}>Удалить</Button></DialogActions></Dialog>
   </Stack></Box>
+}
+
+function EventTypeDetails({ type, types, equipment, onClose }: {
+  type: Schema['EventTypeResponse']; types: Schema['EventTypeResponse'][]
+  equipment: Schema['UniversityEquipmentResponse'][]; onClose: () => void
+}) {
+  const resources = equipment.filter(item => type.equipmentIds.includes(item.id)).map(item => item.name)
+  return <Dialog open fullWidth maxWidth="sm" onClose={onClose}>
+    <DialogTitle>{type.name}</DialogTitle>
+    <DialogContent dividers>
+      <Stack gap={1.5}>
+        <Typography>{formatLabels[type.defaultFormat]} · {type.defaultDurationMinutes} мин · {granularityLabels[type.granularity]}</Typography>
+        <Typography variant="body2">Участники: {type.participantRoles.map(role => participantLabels[role]).join(', ') || '—'}</Typography>
+        <Typography variant="body2">Комиссия: {type.commissionSize || 'не требуется'}{type.requiresChair && ' · с председателем'}</Typography>
+        <Typography variant="body2">Оборудование: {resources.join(', ') || 'не требуется'}</Typography>
+        <Typography variant="body2">Дни подготовки: {type.preparationDays}</Typography>
+        {type.dependencies.map(dependency => <Typography key={dependency.predecessorTypeId} variant="body2">
+          После «{types.find(item => item.id === dependency.predecessorTypeId)?.name ?? 'типа №' + dependency.predecessorTypeId}»
+          · минимум {dependency.minGapDays} дн.{dependency.maxGapDays != null && ` · максимум ${dependency.maxGapDays} дн.`}
+        </Typography>)}
+      </Stack>
+    </DialogContent>
+    <DialogActions><Button onClick={onClose}>Закрыть</Button></DialogActions>
+  </Dialog>
 }
 
 function EventTypeEditor({ type, types, equipment, onClose, onSaved }: { type?: Schema['EventTypeResponse']; types: Schema['EventTypeResponse'][]; equipment: Schema['UniversityEquipmentResponse'][]; onClose: () => void; onSaved: () => void }) {

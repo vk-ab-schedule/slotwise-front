@@ -16,7 +16,8 @@ const demoUsers: Record<Role, User> = {
 
 export class AuthStore {
   user: User | null = null
-  loading = true
+  restoring = true
+  loading = false
   error = ''
 
   constructor() { makeAutoObservable(this) }
@@ -24,12 +25,12 @@ export class AuthStore {
   get isAuthenticated() { return this.user !== null }
 
   async restore() {
-    this.loading = true
+    this.restoring = true
     this.error = ''
     if (isMockMode()) {
       const saved = sessionStorage.getItem('slotwise-demo-role') as Role | null
       this.user = saved && demoUsers[saved] ? demoUsers[saved] : null
-      this.loading = false
+      this.restoring = false
       return
     }
     try {
@@ -41,7 +42,7 @@ export class AuthStore {
         if (!hasStatus(error, 401)) this.error = errorMessage(error)
       })
     }
-    finally { runInAction(() => { this.loading = false }) }
+    finally { runInAction(() => { this.restoring = false }) }
   }
 
   async login(email: string, password: string) {

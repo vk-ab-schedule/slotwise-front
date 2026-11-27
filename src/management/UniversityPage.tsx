@@ -2,6 +2,7 @@ import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogCont
 import { useCallback, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { hasStatus } from '../api/errors'
+import { isMockMode } from '../api/mode'
 import { DataTable, ErrorNotice, FormFields, PageHeading, useLoad, validateFields, type FormValues } from './components'
 import { errorMessage, listRecords, saveRecord } from './repository'
 import { accountAction, accountPasswordLength, deleteUniversityRecord, loadCatalogs, passwordError, universityDefaults, universityFields, universityPayload, universitySections, validateUniversity, type Catalogs, type UniversitySection } from './university'
@@ -24,7 +25,7 @@ export function UniversityPage({ users = false }: { users?: boolean }) {
     return Object.fromEntries(entries)
   }, [selected])
   const overview = useLoad(load)
-  return <Box><PageHeading title={users ? 'Пользователи' : 'Данные вуза'} subtitle={users ? 'Поиск, роли и доступ к SlotWise' : 'Импорт и ручное редактирование · синтетический набор данных'} />
+  return <Box><PageHeading title={users ? 'Пользователи' : 'Данные вуза'} subtitle={users ? 'Поиск, роли и доступ к SlotWise' : 'Справочники и импорт данных'} />
     {!users && <Stack direction="row" flexWrap="wrap" gap={1.5} sx={{ mb: 2.5 }}><Button variant="contained" component={Link} to="/admin/university/import">Загрузить JSON</Button>{selected && <Button variant="outlined" onClick={() => setParams({})}>Все разделы</Button>}</Stack>}
     {!selected ? <>
       {overview.loading && <CircularProgress aria-label="Загрузка разделов" />}
@@ -32,9 +33,8 @@ export function UniversityPage({ users = false }: { users?: boolean }) {
       {overview.data && <DataTable rows={Object.entries(universitySections)} rowKey={([key]) => key} columns={[
         { label: 'Раздел', render: ([key, label]) => <Button onClick={() => setParams({ section: key })}>{label}</Button> },
         { label: 'Записей', render: ([key]) => overview.data?.[key] ?? '—' },
-        { label: 'Действия', render: ([key]) => <Button onClick={() => setParams({ section: key })}>Просмотр и редактирование</Button> },
+        { label: 'Действия', render: ([key]) => <Button onClick={() => setParams({ section: key })}>Открыть</Button> },
       ]} />}
-      <Alert severity="info" icon={false} sx={{ mt: 2.5 }}>Для MVP JSON имитирует данные вуза. Оболочка my.itmo показывает целевое размещение сервиса.</Alert>
     </> : <UniversityTable key={selected} section={selected} />}
   </Box>
 }
@@ -47,6 +47,7 @@ function UniversityTable<R extends UniversitySection>({ section }: { section: R 
   const [pending, setPending] = useState(false), [error, setError] = useState(''), [success, setSuccess] = useState('')
   const load = useCallback(async () => ({ page: await listRecords(section, page, search), catalog: await loadCatalogs() }), [section, page, search])
   const state = useLoad(load, section === 'accounts')
+  const canWrite = isMockMode() || section === 'accounts'
   const links = section === 'teachings' || section === 'supervisions'
   const refreshingAccounts = section === 'accounts' && (state.loading || Boolean(state.error))
   const saved = () => { setEditing(undefined); setSuccess('Изменения сохранены.'); state.reload() }
@@ -70,14 +71,14 @@ function UniversityTable<R extends UniversitySection>({ section }: { section: R 
     return `${person(row.studentId)} → ${person(row.supervisorId)}`
   }
   return <Stack gap={2.5}>
-    <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}><TextField label={`Поиск: ${universitySections[section].toLocaleLowerCase()}`} value={search} onChange={e => { setSearch(e.target.value); setPage(0) }} sx={{ flex: 1 }} /><Button variant="contained" disabled={!state.data} onClick={() => { setError(''); setEditing(null) }}>Создать запись</Button><Button onClick={state.reload}>Обновить</Button></Stack>
+    <Stack direction={{ xs: 'column', sm: 'row' }} gap={2}><TextField label={`Поиск: ${universitySections[section].toLocaleLowerCase()}`} value={search} onChange={e => { setSearch(e.target.value); setPage(0) }} sx={{ flex: 1 }} />{canWrite && <Button variant="contained" disabled={!state.data} onClick={() => { setError(''); setEditing(null) }}>Создать запись</Button>}<Button onClick={state.reload}>Обновить</Button></Stack>
     <ErrorNotice error={state.error || error} retry={state.reload} />{success && <Alert severity="success" onClose={() => setSuccess('')}>{success}</Alert>}
     {state.loading && <CircularProgress aria-label="Загрузка записей" />}
     {state.data && <DataTable rows={state.data.page.items} rowKey={recordKey} count={state.data.page.totalElements} page={page} onPage={setPage} columns={[
       { label: universitySections[section], render: display },
       { label: 'Сведения', render: row => 'email' in row ? `${row.email} · ${roleLabels[row.role]}` : 'studentIds' in row ? `${row.studentIds.length} студентов` : 'online' in row ? row.online ? 'Онлайн' : `${row.capacity} мест · ${row.building ?? ''}` : 'description' in row ? row.description ?? '—' : 'externalId' in row ? row.externalId ?? '—' : '—' },
       { label: 'Состояние', render: row => 'enabled' in row ? row.enabled ? row.hasPassword ? 'Активен' : 'Не задан пароль' : 'Отключён' : 'active' in row ? row.active ? 'Активна' : 'Скрыта' : '—' },
-      { label: 'Действия', render: row => <Stack direction="row" gap={1}>{!links && <Button disabled={refreshingAccounts} onClick={() => setEditing(row)}>Редактировать</Button>}{section === 'accounts' ? <Button disabled={refreshingAccounts} onClick={() => setAccess(row as Schema['AccountResponse'])}>Доступ</Button> : <Button color="error" onClick={() => { setError(''); setDeleting(row) }}>Удалить</Button>}</Stack> },
+      ...(canWrite ? [{ label: 'Действия', render: (row: ResourceMap[R]) => <Stack direction="row" gap={1}>{!links && <Button disabled={refreshingAccounts} onClick={() => setEditing(row)}>Редактировать</Button>}{section === 'accounts' ? <Button disabled={refreshingAccounts} onClick={() => setAccess(row as Schema['AccountResponse'])}>Доступ</Button> : <Button color="error" onClick={() => { setError(''); setDeleting(row) }}>Удалить</Button>}</Stack> }] : []),
     ]} />}
     {editing !== undefined && state.data && <UniversityEditor section={section} row={editing ?? undefined} catalog={state.data.catalog} onClose={() => setEditing(undefined)} onSaved={saved} />}
     {access && <AccountAccess account={access} onClose={() => setAccess(undefined)} onSaved={accessSaved} />}

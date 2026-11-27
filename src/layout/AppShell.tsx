@@ -28,16 +28,17 @@ const roleNames: Record<Role, string> = { STUDENT: 'Студент', TEACHER: '�
 export const AppShell = observer(function AppShell() {
   const location = useLocation()
   const user = authStore.user
+  const demo = isMockMode()
   const tabs = user?.role === 'ADMIN' ? [
-    ['Данные вуза', '/admin/university'], ['Пользователи', '/admin/users'], ['Типы событий', '/admin/event-types'], ['Эксперименты', '/admin/experiments'],
+    ['Данные вуза', '/admin/university'], ['Пользователи', '/admin/users'], ['Типы событий', '/admin/event-types'], ...(demo ? [['Эксперименты', '/admin/experiments']] : []),
   ] : user?.role === 'ORGANIZER' ? [
-    ['Сессии', '/organizer/sessions'], ['Расписание', '/organizer/schedule'], ['Запросы', '/organizer/requests'], ['Что если', '/organizer/scenarios'],
+    ['Сессии', '/organizer/sessions'], ['Расписание', '/organizer/schedule'], ...(demo ? [['Запросы', '/organizer/requests'], ['Что если', '/organizer/scenarios']] : []),
   ] : [
-    ['Моя занятость', '/availability'], ['Моё расписание', '/schedule'], ['Мои запросы', '/requests'],
+    ['Моя занятость', '/availability'], ['Моё расписание', '/schedule'], ...(demo ? [['Мои запросы', '/requests']] : []),
   ]
 
   return <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
-    <Box component="aside" sx={{ width: 224, flexShrink: 0, bgcolor: '#fff', borderRight: `1px solid ${colors.border}`, p: 2.5, display: { xs: 'none', md: 'flex' }, flexDirection: 'column', gap: 1.5 }}>
+    {demo && <Box component="aside" sx={{ width: 224, flexShrink: 0, bgcolor: '#fff', borderRight: `1px solid ${colors.border}`, p: 2.5, display: { xs: 'none', md: 'flex' }, flexDirection: 'column', gap: 1.5 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', height: 42, fontWeight: 700, fontSize: 27, letterSpacing: '-1px', color: '#2d2d2d' }}>
         my<img src={mark} width="44" height="40" alt="." />itmo
       </Box>
@@ -45,16 +46,16 @@ export const AppShell = observer(function AppShell() {
       {navigation.map(([label, icon]) => <Box key={label} sx={{ height: 38, display: 'flex', alignItems: 'center', gap: 1, color: colors.muted, fontSize: 15, px: 0.75 }}><img src={icon} width="18" height="18" alt="" />{label}</Box>)}
       <Box component={NavLink} to={user?.role === 'ADMIN' ? '/admin/university' : user?.role === 'ORGANIZER' ? '/organizer/sessions' : '/availability'} sx={{ height: 38, display: 'flex', alignItems: 'center', gap: 1, color: colors.blue, bgcolor: colors.light, borderRadius: 1, fontSize: 15, fontWeight: 500, px: 0.75 }}><img src={freeTime} width="18" height="18" alt="" />Свободное время</Box>
       <Typography variant="caption" color="text.secondary">SlotWise<br />Планирование событий</Typography>
-    </Box>
+    </Box>}
     <Box sx={{ flexGrow: 1, minWidth: 0 }}>
       <Box component="header" sx={{ height: 89, bgcolor: '#fff', borderBottom: `1px solid ${colors.border}`, px: { xs: 2, md: 4 }, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography sx={{ fontSize: 28, fontWeight: 500 }}>Свободное время</Typography>
+        <Typography sx={{ fontSize: 28, fontWeight: 500 }}>{demo ? 'Свободное время' : 'SlotWise'}</Typography>
         {user && <Stack direction="row" alignItems="center" spacing={2}>
           <Box><Typography variant="body2">{user.firstName} {user.lastName}</Typography><Typography variant="caption" color="text.secondary">{roleNames[user.role]}</Typography></Box>
           {isMockMode() && <Box component="select" aria-label="Демо-роль" value={user.role} onChange={event => { authStore.selectDemoRole(event.target.value as Role); if (location.pathname !== '/login') window.location.assign('/') }} style={{ border: `1px solid ${colors.border}`, borderRadius: 6, padding: 6, background: 'white', color: colors.ink }}>
             {Object.entries(roleNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </Box>}
-          {isMockMode() && <Button component={Link} to="/screens" size="small">42 экрана</Button>}
+          {isMockMode() && <Button component={Link} to="/screens" size="small">Макеты</Button>}
           <Button size="small" onClick={() => void authStore.logout()}>Выйти</Button>
         </Stack>}
       </Box>
